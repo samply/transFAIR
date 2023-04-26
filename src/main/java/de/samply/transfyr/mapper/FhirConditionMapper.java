@@ -1,6 +1,7 @@
 package de.samply.transfyr.mapper;
 
 import java.util.HashMap;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Condition;
@@ -10,9 +11,8 @@ import org.hl7.fhir.r4.model.Resource;
 public class FhirConditionMapper extends FhirMapper {
 
 
-  public FhirConditionMapper(
-      HashMap<String, String> icd10Snomed) {
-    super(icd10Snomed);
+  public FhirConditionMapper(HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
+    super(icd10Snomed, sampleTypeSnomed);
   }
 
   private Condition convertCodingBySystem(Condition in, Condition out, String inSystem, String outSystem){
@@ -30,7 +30,7 @@ public class FhirConditionMapper extends FhirMapper {
 
       if (newCode != null) {
         Coding outCoding = new Coding().setCode(newCode).setSystem(outSystem);
-        out.getCode().addCoding(outCoding);
+        out.getCode().setCoding(List.of(outCoding));
 
       }
     }
@@ -40,19 +40,17 @@ public class FhirConditionMapper extends FhirMapper {
 
   public Resource map(Resource resource){
 
-    Condition outCond = new Condition();
-    Condition inCond = (Condition) resource;
+    Condition in = (Condition) resource;
+    Condition out = in.copy();
 
-    this.convertCodingBySystem(inCond, outCond,
+
+    this.convertCodingBySystem(in, out,
         "http://hl7.org/fhir/sid/icd-10",
-        "http://snomed.org");
-
-    outCond.setSubject(inCond.getSubject());
-    outCond.setId(inCond.getId());
+        "http://snomed.info/sct");
 
 
     //TODO - Return null if resource could not be mapped
 
-    return outCond;
+    return out;
   }
 }

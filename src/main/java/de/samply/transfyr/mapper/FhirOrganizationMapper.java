@@ -9,8 +9,8 @@ public class FhirOrganizationMapper extends FhirMapper {
 
 
   public FhirOrganizationMapper(
-      HashMap<String, String> icd10Snomed) {
-    super(icd10Snomed);
+      HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
+    super(icd10Snomed, sampleTypeSnomed);
   }
 
 

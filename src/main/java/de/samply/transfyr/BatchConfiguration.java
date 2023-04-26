@@ -52,11 +52,23 @@ public class BatchConfiguration {
 
     return icd10Snomed;
   }
+  
+  @Bean
+  public HashMap<String,String> sampleTypeSnomed() throws FileNotFoundException {
+    HashMap<String,String> sampleTypeSnomed = new HashMap<>();
+    ConceptMap cp = (ConceptMap) ctx.newJsonParser().parseResource(new FileInputStream("BBMRI_sample_type_to_snomed_concept_map.json"));
+    cp.getGroup().get(0).getElement().forEach(
+        elem -> sampleTypeSnomed.put(elem.getCode(), elem.getTarget().get(0).getCode())
+        );
+
+    return sampleTypeSnomed;
+  }
 
   @Bean
-  public FhirResourceMapper fhirMapper(HashMap<String,String> icd10Snomed) {
-    return new FhirResourceMapper(new FhirPatientMapper(icd10Snomed), new FhirConditionMapper(icd10Snomed),
-        new FhirSpecimenMapper(icd10Snomed), new FhirObservationMapper(icd10Snomed), new FhirOrganizationMapper(icd10Snomed));
+  public FhirResourceMapper fhirMapper(HashMap<String,String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
+    return new FhirResourceMapper(new FhirPatientMapper(icd10Snomed, sampleTypeSnomed), new FhirConditionMapper(icd10Snomed, sampleTypeSnomed),
+        new FhirSpecimenMapper(icd10Snomed, sampleTypeSnomed), new FhirObservationMapper(icd10Snomed, sampleTypeSnomed), 
+        new FhirOrganizationMapper(icd10Snomed, sampleTypeSnomed));
   }
   
   @Bean

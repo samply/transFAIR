@@ -1,0 +1,351 @@
+{
+    "contact": [
+        {
+            "name": "Name Surname",
+            "telecom": [
+                {
+                    "system": "url",
+                    "value": "samply.de"
+                }
+            ]
+        }
+    ],
+    "date": "2023-04-26",
+    "group": [
+        {
+            "element": [
+                {
+                    "code": "whole-blood",
+                    "target": [
+                        {
+                            "code": "119297000",
+                            "display": "Whole Blood",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "bone-marrow",
+                    "target": [
+                        {
+                            "code": "119359002",
+                            "display": "Bone Marrow",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "buffy-coat",
+                    "target": [
+                        {
+                            "code": "258587000",
+                            "display": "Buffy Coat",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "dried-whole-blood",
+                    "target": [
+                        {
+                            "code": "119294007",
+                            "display": "Dried Whole Blood",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "peripheral-blood-cells-vital",
+                    "target": [
+                        {
+                            "code": "404798000",
+                            "display": "Peripheral Blood Cells Vital",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "blood-plasma",
+                    "target": [
+                        {
+                            "code": "119361006",
+                            "display": "Blood Plasma",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "plasma-cell-free",
+                    "target": [
+                        {
+                            "code": "119361006",
+                            "display": "Blood Plasma",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "plasma-other",
+                    "target": [
+                        {
+                            "code": "119361006",
+                            "display": "Blood Plasma",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "plasma-edta",
+                    "target": [
+                        {
+                            "code": "708049000",
+                            "display": "Plasma EDTA",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "plasma-citrat",
+                    "target": [
+                        {
+                            "code": "708048008",
+                            "display": "Plasma Citrate",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "plasma-heparin",
+                    "target": [
+                        {
+                            "code": "446272009",
+                            "display": "Plasma Heparin",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "blood-serum",
+                    "target": [
+                        {
+                            "code": "119364003",
+                            "display": "Blood Serum",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "ascites",
+                    "target": [
+                        {
+                            "code": "258441009",
+                            "display": "Ascites",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "csf-liquor",
+                    "target": [
+                        {
+                            "code": "258450006",
+                            "display": "CSF/Liquor",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "saliva",
+                    "target": [
+                        {
+                            "code": "119342007",
+                            "display": "Saliva",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "stool-faeces",
+                    "target": [
+                        {
+                            "code": "119339001",
+                            "display": "Stool/Faeces",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "urine",
+                    "target": [
+                        {
+                            "code": "122575003",
+                            "display": "Urine",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "swab",
+                    "target": [
+                        {
+                            "code": "257261003",
+                            "display": "Swab",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "tissue-ffpe",
+                    "target": [
+                        {
+                            "code": "441652008",
+                            "display": "Tissue (FFPE)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "tumor-tissue-ffpe",
+                    "target": [
+                        {
+                            "code": "441652008",
+                            "display": "Tissue (FFPE)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "normal-tissue-ffpe",
+                    "target": [
+                        {
+                            "code": "441652008",
+                            "display": "Tissue (FFPE)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "other-tissue-ffpe",
+                    "target": [
+                        {
+                            "code": "441652008",
+                            "display": "Tissue (FFPE)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "tissue-frozen",
+                    "target": [
+                        {
+                            "code": "16214131000119104",
+                            "display": "Tissue (frozen)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "tumor-tissue-frozen",
+                    "target": [
+                        {
+                            "code": "16214131000119104",
+                            "display": "Tissue (frozen)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "normal-tissue-frozen",
+                    "target": [
+                        {
+                            "code": "16214131000119104",
+                            "display": "Tissue (frozen)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "other-tissue-frozen",
+                    "target": [
+                        {
+                            "code": "16214131000119104",
+                            "display": "Tissue (frozen)",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "tissue-other",
+                    "target": [
+                        {
+                            "code": "119376003",
+                            "display": "Other tissue sample",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "dna",
+                    "target": [
+                        {
+                            "code": "258566005",
+                            "display": "DNA",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "cf-dna",
+                    "target": [
+                        {
+                            "code": "726740008",
+                            "display": "cf-DNA",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "g-dna",
+                    "target": [
+                        {
+                            "code": "18470003",
+                            "display": "g-DNA",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "rna",
+                    "target": [
+                        {
+                            "code": "441673008",
+                            "display": "RNA",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                },
+                {
+                    "code": "liquid-other",
+                    "target": [
+                        {
+                            "code": "33463005",
+                            "display": "Other liquid sample",
+                            "equivalence": "equivalent"
+                        }
+                    ]
+                }
+            ],
+            "source": "https://fhir.bbmri.de/CodeSystem/SampleMaterialType",
+            "target": "http://snomed.info/sct"
+        }
+    ],
+    "name": "BBMRI Sample Type to SNOMED Mapping",
+    "publisher": "Samply",
+    "resourceType": "ConceptMap",
+    "sourceUri": "https://fhir.bbmri.de/CodeSystem/SampleMaterialType",
+    "status": "active",
+    "targetUri": "http://snomed.info/sct",
+    "title": "BBMRI Sample Type to SNOMED Mapping",
+    "url": "http://samply.de/fhir/conceptmaps/bbmri-to-snomed",
+    "version": "1.0"
+}

@@ -8,8 +8,8 @@ public class FhirPatientMapper extends FhirMapper {
 
 
   public FhirPatientMapper(
-      HashMap<String, String> icd10Snomed) {
-    super(icd10Snomed);
+      HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
+    super(icd10Snomed, sampleTypeSnomed);
   }
 
   public Resource map(Resource resource){
