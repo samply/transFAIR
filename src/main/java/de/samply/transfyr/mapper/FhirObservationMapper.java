@@ -23,8 +23,6 @@ public class FhirObservationMapper extends FhirMapper {
     outObservation = inObservation.copy();
 
 
-    //TODO - Return null if resource could not be mapped
-
     return outObservation;
   }
 }

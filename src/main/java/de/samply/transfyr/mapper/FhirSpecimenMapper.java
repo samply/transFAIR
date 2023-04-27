@@ -3,6 +3,7 @@ package de.samply.transfyr.mapper;
 import java.util.HashMap;
 import java.util.List;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.Specimen;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ public class FhirSpecimenMapper extends FhirMapper {
       HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
     super(icd10Snomed, sampleTypeSnomed);
   }
-  
+
   private Specimen convertSampleTypeBySystem(Specimen in, Specimen out, String inSystem, String outSystem){
 
 
@@ -43,10 +44,15 @@ public class FhirSpecimenMapper extends FhirMapper {
 
     Specimen in = (Specimen) resource;
     Specimen out = in.copy();
-    
+
+    out.setMeta(
+        new Meta()
+        .addProfile(
+            "https://www.medizininformatik-initiative.de/fhir/ext/modul-biobank/StructureDefinition/Specimen"));
+
     this.convertSampleTypeBySystem(in, out, "https://fhir.bbmri.de/CodeSystem/SampleMaterialType", "http://snomed.info/sct");
-    
-    
+
+    //TODO storage temperature
 
     return out;
   }

@@ -2,10 +2,11 @@ package de.samply.transfyr.mapper;
 
 import java.util.HashMap;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Condition;
+import org.hl7.fhir.r4.model.Meta;
 import org.hl7.fhir.r4.model.Resource;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class FhirConditionMapper extends FhirMapper {
@@ -42,6 +43,11 @@ public class FhirConditionMapper extends FhirMapper {
 
     Condition in = (Condition) resource;
     Condition out = in.copy();
+    
+    out.setMeta(
+        new Meta()
+            .addProfile(
+                "https://www.medizininformatik-initiative.de/fhir/core/modul-diagnose/StructureDefinition/Diagnose"));
 
 
     this.convertCodingBySystem(in, out,
