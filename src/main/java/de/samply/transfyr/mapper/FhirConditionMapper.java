@@ -51,6 +51,7 @@ public class FhirConditionMapper extends FhirMapper {
 
 
     //this.convertCodingBySystem(in, out, "http://hl7.org/fhir/sid/icd-10", "http://snomed.info/sct");
+    //ICD-10 is supported
 
 
     //TODO - Return null if resource could not be mapped
