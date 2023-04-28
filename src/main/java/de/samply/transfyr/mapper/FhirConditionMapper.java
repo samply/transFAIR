@@ -50,9 +50,7 @@ public class FhirConditionMapper extends FhirMapper {
                 "https://www.medizininformatik-initiative.de/fhir/core/modul-diagnose/StructureDefinition/Diagnose"));
 
 
-    this.convertCodingBySystem(in, out,
-        "http://hl7.org/fhir/sid/icd-10",
-        "http://snomed.info/sct");
+    //this.convertCodingBySystem(in, out, "http://hl7.org/fhir/sid/icd-10", "http://snomed.info/sct");
 
 
     //TODO - Return null if resource could not be mapped
