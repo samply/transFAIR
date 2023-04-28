@@ -54,7 +54,7 @@ public class BatchConfiguration {
   }
   
   @Bean
-  public HashMap<String,String> sampleTypeSnomed() throws FileNotFoundException {
+  public HashMap<String,String> sampleType2Snomed() throws FileNotFoundException {
     HashMap<String,String> sampleTypeSnomed = new HashMap<>();
     ConceptMap cp = (ConceptMap) ctx.newJsonParser().parseResource(new FileInputStream("BBMRI_sample_type_to_snomed_concept_map.json"));
     cp.getGroup().get(0).getElement().forEach(
@@ -65,10 +65,10 @@ public class BatchConfiguration {
   }
 
   @Bean
-  public FhirResourceMapper fhirMapper(HashMap<String,String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
-    return new FhirResourceMapper(new FhirPatientMapper(icd10Snomed, sampleTypeSnomed), new FhirConditionMapper(icd10Snomed, sampleTypeSnomed),
-        new FhirSpecimenMapper(icd10Snomed, sampleTypeSnomed), new FhirObservationMapper(icd10Snomed, sampleTypeSnomed), 
-        new FhirOrganizationMapper(icd10Snomed, sampleTypeSnomed));
+  public FhirResourceMapper fhirMapper(HashMap<String,String> icd10Snomed, HashMap<String, String> sampleType2Snomed) {
+    return new FhirResourceMapper(new FhirPatientMapper(icd10Snomed, sampleType2Snomed), new FhirConditionMapper(icd10Snomed, sampleType2Snomed),
+        new FhirSpecimenMapper(icd10Snomed, sampleType2Snomed), new FhirObservationMapper(icd10Snomed, sampleType2Snomed), 
+        new FhirOrganizationMapper(icd10Snomed, sampleType2Snomed));
   }
   
   @Bean
@@ -109,7 +109,7 @@ public class BatchConfiguration {
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
     return new StepBuilder("stepOrganization", jobRepository)
-        .<Bundle, Bundle> chunk(1, transactionManager)
+        .<Bundle, Bundle> chunk(10, transactionManager)
         .reader(organizationReader())
         .processor(processor)
         .writer(writer())
@@ -121,7 +121,7 @@ public class BatchConfiguration {
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
     return new StepBuilder("stepCondition", jobRepository)
-        .<Bundle, Bundle> chunk(1, transactionManager)
+        .<Bundle, Bundle> chunk(10, transactionManager)
         .reader(conditionReader())
         .processor(processor)
         .writer(writer())
@@ -134,7 +134,7 @@ public class BatchConfiguration {
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
     return new StepBuilder("stepObservation", jobRepository)
-        .<Bundle, Bundle> chunk(1, transactionManager)
+        .<Bundle, Bundle> chunk(10, transactionManager)
         .reader(observationReader())
         .processor(processor)
         .writer(writer())
@@ -147,7 +147,7 @@ public class BatchConfiguration {
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
     return new StepBuilder("stepSpecimen", jobRepository)
-        .<Bundle, Bundle> chunk(1, transactionManager)
+        .<Bundle, Bundle> chunk(10, transactionManager)
         .reader(specimenReader())
         .processor(processor)
         .writer(writer())
@@ -160,7 +160,8 @@ public class BatchConfiguration {
     return new JobBuilder("bbmriToMiiJob", jobRepository)
         .incrementer(new RunIdIncrementer())
         .start(stepOrganization)
-        .next(stepCondition)
+        //.next(stepCondition)
+        //TODO double check if Condition is needed
         .next(stepObservation)
         .next(stepSpecimen)
         .build();

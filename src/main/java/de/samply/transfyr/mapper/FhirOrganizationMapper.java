@@ -21,12 +21,12 @@ public class FhirOrganizationMapper extends FhirMapper {
 
 
   public FhirOrganizationMapper(
-      HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
-    super(icd10Snomed, sampleTypeSnomed);
+      HashMap<String, String> icd10Snomed, HashMap<String, String> sampleType2Snomed) {
+    super(icd10Snomed, sampleType2Snomed);
   }
 
 
-  public Resource map(Resource resource){
+  public List<Resource> map(Resource resource){
 
     Organization in = (Organization) resource;
     Organization out = in.copy();
@@ -39,6 +39,6 @@ public class FhirOrganizationMapper extends FhirMapper {
       }
     }
 
-    return resource;
+    return List.of(resource);
   }
 }

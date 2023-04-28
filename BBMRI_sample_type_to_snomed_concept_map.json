@@ -80,7 +80,7 @@
                         {
                             "code": "119361006",
                             "display": "Blood Plasma",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -90,7 +90,7 @@
                         {
                             "code": "119361006",
                             "display": "Blood Plasma",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -210,7 +210,7 @@
                         {
                             "code": "441652008",
                             "display": "Tissue (FFPE)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -220,7 +220,7 @@
                         {
                             "code": "441652008",
                             "display": "Tissue (FFPE)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -230,7 +230,7 @@
                         {
                             "code": "441652008",
                             "display": "Tissue (FFPE)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -250,7 +250,7 @@
                         {
                             "code": "16214131000119104",
                             "display": "Tissue (frozen)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -260,7 +260,7 @@
                         {
                             "code": "16214131000119104",
                             "display": "Tissue (frozen)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -270,7 +270,7 @@
                         {
                             "code": "16214131000119104",
                             "display": "Tissue (frozen)",
-                            "equivalence": "equivalent"
+                            "equivalence": "wider"
                         }
                     ]
                 },

@@ -7,3 +7,7 @@ fhir:
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: false
+spring:
+  batch:
+    job:
+      names: bbmriToMiiJob

@@ -39,7 +39,7 @@ public class FhirConditionMapper extends FhirMapper {
     return out;
   }
 
-  public Resource map(Resource resource){
+  public List<Resource> map(Resource resource){
 
     Condition in = (Condition) resource;
     Condition out = in.copy();
@@ -56,6 +56,6 @@ public class FhirConditionMapper extends FhirMapper {
 
     //TODO - Return null if resource could not be mapped
 
-    return out;
+    return List.of(out);
   }
 }
