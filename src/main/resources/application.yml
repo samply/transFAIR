@@ -8,6 +8,6 @@ data:
   outputFileDirectory: ./test
   writeBundlesToFile: false
 spring:
-  batch:
-    job:
-      names: bbmriToMiiJob
+  profiles:
+    active:
+      mii2bbmri

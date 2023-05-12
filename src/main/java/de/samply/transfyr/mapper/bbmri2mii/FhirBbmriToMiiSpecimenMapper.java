@@ -1,4 +1,4 @@
-package de.samply.transfyr.mapper;
+package de.samply.transfyr.mapper.bbmri2mii;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +20,7 @@ import org.hl7.fhir.r4.model.Specimen;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class FhirSpecimenMapper extends FhirMapper {
+public class FhirBbmriToMiiSpecimenMapper extends FhirBbmriToMiiMapper {
 
   private static final String BBMRI_DIAGNOSIS = "https://fhir.bbmri.de/StructureDefinition/SampleDiagnosis";
   private static final String BBMRI_CUSTODIAN = "https://fhir.bbmri.de/StructureDefinition/Custodian";
@@ -46,7 +46,7 @@ public class FhirSpecimenMapper extends FhirMapper {
       Map.entry("temperatureRoom", Pair.of(11 , 30))
       );
 
-  public FhirSpecimenMapper(
+  public FhirBbmriToMiiSpecimenMapper(
       HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
     super(icd10Snomed, sampleTypeSnomed);
   }

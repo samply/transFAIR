@@ -7,6 +7,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Resource;
 import org.springframework.batch.item.ItemProcessor;
 import de.samply.transfyr.mapper.FhirResourceMapper;
+import de.samply.transfyr.mapper.bbmri2mii.FhirBbmriToMiiResourceMapper;
 import de.samply.transfyr.util.FhirBundleBuilder;
 
 @Slf4j

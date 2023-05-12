@@ -1,4 +1,4 @@
-package de.samply.transfyr.mapper;
+package de.samply.transfyr.mapper.bbmri2mii;
 
 import java.util.HashMap;
 import java.util.List;
@@ -9,10 +9,10 @@ import org.hl7.fhir.r4.model.Resource;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class FhirConditionMapper extends FhirMapper {
+public class FhirBbmriToMiiConditionMapper extends FhirBbmriToMiiMapper {
 
 
-  public FhirConditionMapper(HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
+  public FhirBbmriToMiiConditionMapper(HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
     super(icd10Snomed, sampleTypeSnomed);
   }
 
