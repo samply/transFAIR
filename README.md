@@ -40,6 +40,10 @@ spring:
 
 - [ ] Implement pseudonymisation
 - [ ] Double-check specimen type mappings 
+- [ ] Smoking status mappings
+- [ ] Body weight mapping
+- [ ] BMI mappings
+- [ ] Fasting status mappings
 - [ ] Log unmappable codes
 - [ ] Implement Beacon as a target format
 - [ ] Additional code systems for diagnoses
