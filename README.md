@@ -47,7 +47,7 @@ spring:
 - [ ] Log unmappable codes
 - [ ] Implement Beacon as a target format
 - [ ] Additional code systems for diagnoses
-- [ ] Decide on using blacklist/whitelist
+- [ ] Decide on using allowlist/denylist
 - [ ] Decide on identifiers instead of IDs in references
 - [ ] Incremental transfer, dealing with overwriting
 - [ ] Integration tests
