@@ -1,8 +1,8 @@
 fhir:
   input:
-    url: http://localhost:8080/fhir
+    url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
   output:
-    url: http://localhost:8090/fhir
+    url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
   exampleFhirConfig: test
 data:
   outputFileDirectory: ./test
@@ -10,4 +10,4 @@ data:
 spring:
   profiles:
     active:
-      mii2bbmri
+      ${SPRING_PROFILES_ACTIVE:mii2bbmri}
