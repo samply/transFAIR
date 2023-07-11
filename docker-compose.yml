@@ -1,0 +1,37 @@
+version: "3.7"
+
+services:
+  source_blaze:
+    container_name: source-blaze
+    image: samply/blaze:develop
+    environment:
+      BASE_URL: "http://source_blaze:8080"
+    ports:
+      - "8080:8080"
+
+  target_blaze:
+    container_name: target-blaze
+    image: samply/blaze:develop
+    environment:
+      BASE_URL: "http://target_blaze:8080"
+    ports:
+      - "8090:8080"
+
+  test-data-loader:
+    container_name: test-data-loader
+    image: samply/test-data-loader
+    environment:
+      FHIR_STORE_URL: "http://source_blaze:8080/fhir"
+      PATIENT_COUNT: "2000"
+    command: sh -c "sleep 60 && /app/run.sh" # wait for Blaze to start
+
+  transfair:
+    container_name: transfair
+    image: samply/transfyr
+    environment:
+      FHIR_INPUT_URL: "http://source_blaze:8080/fhir"
+      FHIR_OUTPUT_URL: "http://target_blaze:8080/fhir"
+      SPRING_PROFILES_ACTIVE: "copy"
+    restart: on-failure
+    command: sh -c "sleep 160 && java -jar transFAIR.jar" # Wait for data to load
+
