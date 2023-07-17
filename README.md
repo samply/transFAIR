@@ -15,6 +15,8 @@ Right now 3 types of transfer are supported:
 
 Currently only ICD10GM to ICD10GM mapping of diagnoses is supported. 
 
+:construction: This tool is still under heavy construction and does not yet fulfill all of its intended use-cases. In particular, it does not yet handle some cases of data integration such as incremental updates or edge cases such as conflicting data. To find out if TransFAIR can serve your needs, we recommend you contact us to become a pilot site. :construction:
+
 ## Setup Develop
 
 To Setup a development environment start two FHIR servers on localhost. Fill the first FHIR server with testdata and run the batch job in your IDE
@@ -53,6 +55,9 @@ spring:
 - [ ] Integration tests
 - [ ] Scheduler
 
+## Outlook
+
+We have created TransFAIR with the specific use-case of bringing German biobanks and data integration centers closer together. Prospectively, we intend TransFAIR to become a toolbox with easily reusable components for use with [HL7 FHIR](https://hl7.org/fhir/), [OMOP](https://www.ohdsi.org/data-standardization/) and other well-known SQL, CSV and XML schemata.
 
 ## License
 
