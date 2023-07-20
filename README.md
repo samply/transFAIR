@@ -6,8 +6,7 @@ TransFAIR is a specialized tool for data integration for medical institutions. I
 
 - **E**xtraction from source systems
 - **T**ransformation into target schemata
-- **L**oading into target systems
-- Linkage of IDs / Pseudonymisation
+- **L**oading into target system
 - Filtering of datasets
 
 TransFAIR is designed to
