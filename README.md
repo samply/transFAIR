@@ -36,9 +36,9 @@ TransFAIR is configured using environment variables:
 
 | Variable                                  | Description                                                                                                   | Default                                                            |
 |-------------------------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
-| `FHIR_INPUT_URL`                          | HTTP Address of the `SOURCE` datastore                                                                        | (required)                                                         |
-| `FHIR_OUTPUT_URL`                         | HTTP Address of the `TARGET` datastore                                                                        | (required)                                                         |                                                                                         |                                                                    |
-| `PROFILE`                                 | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles))                                    | (required)                                                         |                                                       |                              |
+| `FHIR_INPUT_URL`                          | HTTP Address of the `SOURCE` datastore                                                                        | http://localhost:8080/fhir                                                         |
+| `FHIR_OUTPUT_URL`                         | HTTP Address of the `TARGET` datastore                                                                        | http://localhost:8090/fhir                                                         |                                                                                         |                                                                    |
+| `PROFILE`                                 | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles))                                    | mii2bbmri                                                         |                                                       |                              |
 
 ## Filters
 
