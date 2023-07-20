@@ -11,7 +11,7 @@ import de.samply.transfyr.mapper.bbmri2mii.FhirBbmriToMiiPatientMapper;
 import de.samply.transfyr.mapper.bbmri2mii.FhirBbmriToMiiSpecimenMapper;
 import lombok.extern.slf4j.Slf4j;
 
-@Profile("copy")
+@Profile("fhircopy")
 @Slf4j
 public class FhirCopyResourceMapper implements FhirResourceMapper {
 

@@ -3,11 +3,7 @@ fhir:
     url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
   output:
     url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
-  exampleFhirConfig: test
-data:
-  outputFileDirectory: ./test
-  writeBundlesToFile: false
 spring:
   profiles:
     active:
-      ${SPRING_PROFILES_ACTIVE:mii2bbmri}
+      ${PROFILE:mii2bbmri}
