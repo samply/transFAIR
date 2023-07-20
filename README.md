@@ -26,7 +26,7 @@ The tool focuses on use-cases and IT systems encountered in network medical rese
 
 TransFAIR is shipped with so-called ETL profiles. Currently, these are:
 
-- `fhircopy` - transfer all ressources unchanged from one FHIR server to another. This can be used to perform filtering and/or pseudonymisation across servers.
+- `fhircopy` - transfer all resources unchanged from one FHIR server to another. This can be used to perform filtering and/or pseudonymisation across servers.
 - `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset).
 - `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/fassade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead.
 
