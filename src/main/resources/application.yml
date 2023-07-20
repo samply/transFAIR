@@ -6,4 +6,4 @@ fhir:
 spring:
   profiles:
     active:
-      ${SPRING_PROFILES_ACTIVE:mii2bbmri}
+      ${PROFILE:mii2bbmri}

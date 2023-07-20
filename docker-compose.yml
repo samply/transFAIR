@@ -31,7 +31,7 @@ services:
     environment:
       FHIR_INPUT_URL: "http://source_blaze:8080/fhir"
       FHIR_OUTPUT_URL: "http://target_blaze:8080/fhir"
-      SPRING_PROFILES_ACTIVE: "fhircopy"
+      PROFILE: "fhircopy"
     restart: on-failure
     command: sh -c "sleep 160 && java -jar transFAIR.jar" # Wait for data to load
 
