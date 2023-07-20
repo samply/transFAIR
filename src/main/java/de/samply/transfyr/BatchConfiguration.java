@@ -103,7 +103,7 @@ public class BatchConfiguration {
   }
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public FhirResourceMapper copyMapper() {
     return new FhirCopyResourceMapper();
   }
@@ -251,7 +251,7 @@ public class BatchConfiguration {
   }
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public Step copyOrganization(JobRepository jobRepository,
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
@@ -264,7 +264,7 @@ public class BatchConfiguration {
   }
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public Step copyCondition(JobRepository jobRepository,
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
@@ -278,7 +278,7 @@ public class BatchConfiguration {
   
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public Step copyObservation(JobRepository jobRepository,
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
@@ -292,7 +292,7 @@ public class BatchConfiguration {
   
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public Step copySpecimen(JobRepository jobRepository,
       PlatformTransactionManager transactionManager,
       FhirBundleProcessor processor) {
