@@ -2,45 +2,89 @@
 
 ## Introduction
 
-TransFAIR is intended to be a ready-to-use tool for data integration for medical institutions. Instead of creating own ETL processes by hand, this tool facilitates certain data integration tasks like:
+TransFAIR is a specialized tool for data integration for medical institutions. Instead of creating own ETL processes by hand, this tool facilitates certain data integration tasks like:
 
 - **E**xtraction from source systems
 - **T**ransformation into target schemata
 - **L**oading into target systems
+- Linkage of IDs / Pseudonymisation
+- Filtering of datasets
 
-Right now 3 types of transfer are supported:
-- bbmri2mii - transforming resources from BBMRI FHIR profiles to MII FHIR profiles
-- mii2bbmri - transforming resources from MII FHIR profiles to BBMRI FHIR profiles
-- copy - copying resources from one FHIR store to another without transforming them
+TransFAIR is designed to
 
-Currently only ICD10GM to ICD10GM mapping of diagnoses is supported. 
+- minimize data integration effort for personnel at the sites, especially if connected to multiple networks
+- be easily extensible with new dataset/mapping definitions
+- thus accelerate and facilitate rollout of new features and dataset extensions
+- provide more consistent data quality (because as long as the source data is okay, errors within TransFAIR's mappings can be fixed centrally)
 
-:construction: This tool is still under heavy construction and does not yet fulfill all of its intended use-cases. In particular, it does not yet handle some cases of data integration such as incremental updates or edge cases such as conflicting data. To find out if TransFAIR can serve your needs, we recommend you contact us to become a pilot site. :construction:
+The tool focuses on use-cases and IT systems encountered in network medical research in Germany, in particular:
 
-## Setup Develop
+- Tumor Documentation Systems based on the [ADT/GEKID dataset](https://www.gekid.de/adt-gekid-basisdatensatz), as found in German Comprehensive Cancer Centers and connected via the [German Cancer Consortium (DKTK)](https://dktk.dkfz.de/en/clinical-platform), e.g. CREDOS, GTDS, Onkostar
+- The [CentraXX biobanking solution](https://www.kairos.de/produkte/centraxx-bio/) often found in German biobanks, which are networked under the umbrella of the [German Biobank Node](https://www.bbmri.de)
+- [Bridgeheads](https://github.com/samply/bridgehead) as used in the above networks as well as the European [Biobanking and BioMolecular Research Infrastructure (BBMRI-ERIC)](https://bbmri-eric.eu)
+- Data Integration Centers, as established by the [Medical Informatics Initiative](https://www.medizininformatik-initiative.de) and under the umbrella of the [Netzwerk Universitätsmedizin](https://www.netzwerk-universitaetsmedizin.de), based on the [MII Core Dataset in FHIR](https://simplifier.net/organization/koordinationsstellemii)
 
-To Setup a development environment start two FHIR servers on localhost. Fill the first FHIR server with testdata and run the batch job in your IDE
-Check the second FHIR server to see how your data was transferred. 
+## Profiles
 
-``` yml
+TransFAIR is shipped with so-called ETL profiles. Currently, these are:
+
+- `fhircopy` - transfer all ressources unchanged from one FHIR server to another. This can be used to perform filtering and/or pseudonymisation across servers.
+- `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset).
+- `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/fassade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead.
+
+## Configuration
+
+TransFAIR is configured using environment variables:
+
+| Variable                                  | Description                                                                                                   | Default                                                            |
+|-------------------------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
+| `TF_FHIR_SERVER_SOURCE_ADDRESS`           | HTTP Address of the `SOURCE` datastore                                                                        | (required)                                                         |
+| `TF_FHIR_SERVER_TARGET_ADDRESS`           | HTTP Address of the `TARGET` datastore                                                                        | (required)                                                         |
+| `TF_FHIR_SERVER_(SOURCE|TARGET)_USERNAME` | Basic Auth User                                                                                               |                                                                    |
+| `TF_FHIR_SERVER_(SOURCE|TARGET)_PASSWORD` | Basic Auth Password                                                                                           |                                                                    |
+| `TF_PROFILE`                              | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles))                                    | (required)                                                         |
+| `TF_RESOURCES_START`                      | (`Patient`/`Specimen`) Starts collection resources on the specified level.                                    | `Patient`                                                          |
+| `TF_RESOURCES_FILTER`                     | Set to export only the specified resources.                                                                   | none, will export all ressources                                   |
+| `TF_RESOURCES_WHITELIST`                  | Transfers only resources according to the [Filters](#filters).                                                |                                                                    |
+| `TF_RESOURCES_BLACKLIST`                  | ignores resources according to the [Filters](#filters).                                                       |                                                                    |
+| `TF_IDMAPPER_SETTING`                		  | `none`, `csvmapping`, `mainzellistemapping` or `epixmapping` (see [Pseudonymisation](#pseudonymisation))	   	| none, IDs will be unchanged                                        |
+| `TF_IDMAPPING_CSV_PATH`					          | path where the CSV-file containing the ID-Mappings for pseudonymisation is stored									            | none, only required iff TF-IDMAPPER_SETTING is set to `csvmapping` |
+| `TF_EXPORT_FILE_PATH`                     | Path to directory for dumping Beacon-related files.                                                           | /data                                                              |
+
+## Filters
+
+TransFAIR supports filters to customize the ETL process. Filters are coded with json. For example, here we provide a filter that only transfers patients with `C*` ICD-10 diagnoses.
+
+```json
+{
+  "patient":
+  {
+    "diagnosis_icd10": ["C*"]
+  }
+}
+```
+
+## Setup a Development Environment
+
+To setup a development environment, start two FHIR servers on localhost. Fill the first FHIR server with testdata and run the batch job in your IDE. Check the second FHIR server to see how your data was transferred.
+
+```yml
 fhir:
-  input:
+  source:
     url: http://localhost:8080/fhir # source store
-  output:
+  target:
     url: http://localhost:8090/fhir # target store
-  exampleFhirConfig: test
-data:
-  outputFileDirectory: ./test
-  writeBundlesToFile: false
 spring:
   profiles:
     active:
-      mii2bbmri # job to run
+      mii2bbmri # profile to run
 ```
 
 ## Roadmap
 
-- [ ] Implement pseudonymisation
+:construction: This tool is still under intensive development. Features on the roadmap are:
+
+- [ ] Pseudonymisation
 - [ ] Double-check specimen type mappings 
 - [ ] Smoking status mappings
 - [ ] Body weight mapping
@@ -48,16 +92,15 @@ spring:
 - [ ] Fasting status mappings
 - [ ] Log unmappable codes
 - [ ] Implement Beacon as a target format
-- [ ] Additional code systems for diagnoses
+- [ ] Additional code systems for diagnoses beyond ICD10GM
 - [ ] Decide on using allowlist/denylist
 - [ ] Decide on identifiers instead of IDs in references
 - [ ] Incremental transfer, dealing with overwriting
 - [ ] Integration tests
 - [ ] Scheduler
+- [ ] Support standards beyond [HL7 FHIR](https://hl7.org/fhir/), e.g. [OMOP](https://www.ohdsi.org/data-standardization/) and other well-known SQL, CSV and XML schemata.
 
-## Outlook
-
-We have created TransFAIR with the specific use-case of bringing German biobanks and data integration centers closer together. Prospectively, we intend TransFAIR to become a toolbox with easily reusable components for use with [HL7 FHIR](https://hl7.org/fhir/), [OMOP](https://www.ohdsi.org/data-standardization/) and other well-known SQL, CSV and XML schemata.
+To find out if TransFAIR can serve your needs today, we recommend you contact us to become a pilot site.
 
 ## License
 
