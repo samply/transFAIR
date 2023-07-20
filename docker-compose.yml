@@ -23,7 +23,7 @@ services:
     environment:
       FHIR_STORE_URL: "http://source_blaze:8080/fhir"
       PATIENT_COUNT: "2000"
-    command: sh -c "sleep 60 && /app/run.sh" # wait for Blaze to start
+    command: sh -c "sleep 80 && /app/run.sh" # wait for Blaze to start
 
   transfair:
     container_name: transfair
@@ -34,4 +34,13 @@ services:
       PROFILE: "fhircopy"
     restart: on-failure
     command: sh -c "sleep 160 && java -jar transFAIR.jar" # Wait for data to load
+
+  blazectl:
+    container_name: blazectl
+    image: samply/blazectl
+    build:
+      context: .
+      dockerfile: ./DockerfileBlazectl
+    # Wait for transfair
+    command: sh -c "sleep 400 && echo Source store && blazectl --server http://source_blaze:8080/fhir count-resources && echo Target store && blazectl --server http://target_blaze:8080/fhir count-resources"
 
