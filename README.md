@@ -40,18 +40,6 @@ TransFAIR is configured using environment variables:
 | `FHIR_OUTPUT_URL`                         | HTTP Address of the `TARGET` datastore                                                                        | http://localhost:8090/fhir                                                         |                                                                                         |                                                                    |
 | `PROFILE`                                 | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles))                                    | mii2bbmri                                                         |                                                       |                              |
 
-## Filters
-
-TransFAIR supports filters to customize the ETL process. Filters are coded with json. For example, here we provide a filter that only transfers patients with `C*` ICD-10 diagnoses.
-
-```json
-{
-  "patient":
-  {
-    "diagnosis_icd10": ["C*"]
-  }
-}
-```
 
 ## Setup a Development Environment
 
