@@ -28,6 +28,7 @@ services:
   transfair:
     container_name: transfair
     image: samply/transfair
+    build: .
     environment:
       FHIR_INPUT_URL: "http://source_blaze:8080/fhir"
       FHIR_OUTPUT_URL: "http://target_blaze:8080/fhir"

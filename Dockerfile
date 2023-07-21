@@ -5,6 +5,7 @@ WORKDIR /app
 COPY . ./
 
 ENV TZ=Europe/Berlin
+RUN rm -rf target/*
 RUN mvn install
 RUN mv target/*.jar target/transFAIR.jar
 
