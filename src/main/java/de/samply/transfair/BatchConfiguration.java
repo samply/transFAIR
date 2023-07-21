@@ -330,7 +330,7 @@ public class BatchConfiguration {
   }
   
   @Bean
-  @Profile("copy")
+  @Profile("fhircopy")
   public Job copy(JobRepository jobRepository, Step copyCondition, Step copyOrganization, Step copyObservation, Step copySpecimen) {
     return new JobBuilder("miiToBbmriJob", jobRepository)
         .incrementer(new RunIdIncrementer())
