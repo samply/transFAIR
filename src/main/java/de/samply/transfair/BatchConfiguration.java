@@ -3,6 +3,8 @@ package de.samply.transfair;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.util.HashMap;
+
+import de.samply.transfair.reader.*;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
 import org.springframework.batch.core.Job;
@@ -20,6 +22,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.transaction.PlatformTransactionManager;
 import ca.uhn.fhir.context.FhirContext;
+import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.mapper.FhirResourceMapper;
 import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiConditionMapper;
 import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiObservationMapper;
@@ -35,6 +38,7 @@ import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriPatientMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriResourceMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriSpecimenMapper;
 import de.samply.transfair.processor.FhirBundleProcessor;
+import de.samply.transfair.processor.ReferenceStrippingFhirBundleProcessor;
 import de.samply.transfair.reader.FhirConditionReader;
 import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
@@ -101,13 +105,20 @@ public class BatchConfiguration {
         new FhirMiiToBbmriSpecimenMapper(icd10Snomed, snomed2SampleType), new FhirMiiToBbmriObservationMapper(icd10Snomed, snomed2SampleType), 
         new FhirMiiToBbmriOrganizationMapper(icd10Snomed, snomed2SampleType));
   }
-  
+
   @Bean
   @Profile("fhircopy")
   public FhirResourceMapper copyMapper() {
     return new FhirCopyResourceMapper();
   }
-  
+
+  @Bean
+  @Profile("bbmri2beacon")
+  public FhirResourceMapper bbmriToBeaconMapper() {
+    System.out.println("BatchConfiguration.bbmriToBeaconMapper: entered, this.class: " + this.getClass().getName());
+    return new FhirBbmriToBeaconResourceMapper();
+  }
+
   @Bean
   public ItemReader<Bundle> organizationReader() {
     return new FhirOrganizationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
@@ -122,18 +133,29 @@ public class BatchConfiguration {
   public ItemReader<Bundle> observationReader() {
     return new FhirObservationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
-  
+
   @Bean
   public ItemReader<Bundle> specimenReader() {
     return new FhirSpecimenReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
-  
+
+  @Bean
+  public ItemReader<Bundle> patientReader() {
+    return new FhirPatientReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+  }
+
 
   @Bean
   public FhirBundleProcessor processor(FhirResourceMapper mapper) {
     return new FhirBundleProcessor(mapper);
   }
-  
+
+
+  @Bean
+  public ReferenceStrippingFhirBundleProcessor referenceStrippingProcessor(FhirResourceMapper mapper) {
+    System.out.println("BatchConfiguration.referenceStrippingProcessor: entered, this.class: " + this.getClass().getName());
+    return new ReferenceStrippingFhirBundleProcessor();
+  }
 
 
   @Bean
@@ -141,7 +163,13 @@ public class BatchConfiguration {
   public ItemWriter<Bundle> writer() {
     return new FhirBundleWriter(ctx.newRestfulGenericClient(fhirProperties.getOutput().getUrl()));
   }
-  
+
+  @Bean
+  @StepScope
+  public ItemWriter<Bundle> referenceStrippingWriter() {
+    return new FhirBundleWriter(ctx.newRestfulGenericClient(fhirProperties.getOutput().getUrl()));
+  }
+
   @Bean
   @Profile("bbmri2mii")
   public Step stepBbmriToMiiOrganization(JobRepository jobRepository,
@@ -262,7 +290,7 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
+
   @Bean
   @Profile("fhircopy")
   public Step copyCondition(JobRepository jobRepository,
@@ -303,7 +331,21 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
+
+  @Bean
+  @Profile("bbmri2beacon")
+  public Step stepBbmri2beaconPatient(JobRepository jobRepository,
+                                      PlatformTransactionManager transactionManager,
+                                      ReferenceStrippingFhirBundleProcessor referenceStrippingProcessor) {
+    System.out.println("stepBbmri2beaconPatient: entered");
+    return new StepBuilder("stepBbmri2beaconPatient", jobRepository)
+            .<Bundle, Bundle> chunk(10, transactionManager)
+            .reader(patientReader())
+            .processor(referenceStrippingProcessor)
+            .writer(referenceStrippingWriter())
+            .build();
+  }
+
 
   @Bean
   @Profile("bbmri2mii")
@@ -328,7 +370,7 @@ public class BatchConfiguration {
         .next(stepMiiToBbmriSpecimen)
         .build();
   }
-  
+
   @Bean
   @Profile("fhircopy")
   public Job copy(JobRepository jobRepository, Step copyCondition, Step copyOrganization, Step copyObservation, Step copySpecimen) {
@@ -339,6 +381,16 @@ public class BatchConfiguration {
         .next(copyObservation)
         .next(copySpecimen)
         .build();
+  }
+
+  @Bean
+  @Profile("bbmri2beacon")
+  public Job bbmriToBeaconJob(JobRepository jobRepository, Step stepBbmri2beaconPatient) {
+    System.out.println("bbmriToBeaconJob: entered");
+    return new JobBuilder("bbmriToBeaconJob", jobRepository)
+            .incrementer(new RunIdIncrementer())
+            .start(stepBbmri2beaconPatient)
+            .build();
   }
 
 }
