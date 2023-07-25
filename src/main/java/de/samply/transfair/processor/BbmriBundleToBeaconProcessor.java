@@ -1,5 +1,8 @@
 package de.samply.transfair.processor;
 
+import de.samply.transfair.mapper.FhirResourceMapper;
+import de.samply.transfair.mapper.bbmri2beacon.Bbmri2BeaconIndividual;
+import de.samply.transfair.models.beacon.BeaconIndividuals;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
@@ -12,25 +15,38 @@ import org.hl7.fhir.r4.model.Patient;
 import org.springframework.batch.item.ItemProcessor;
 
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
-public class ReferenceStrippingFhirBundleProcessor implements ItemProcessor<Bundle, Bundle> {
-  @Override
-  public Bundle process(final Bundle bundle) {
-    System.out.println("ReferenceStrippingFhirBundleProcessor.process; entered");
+public class BbmriBundleToBeaconProcessor implements ItemProcessor<Bundle, BeaconIndividuals> {
+  // FHIR to Beacon conversion does not need a mapper, but without it, invisible Spring magic stops working.
+  FhirResourceMapper mapper;
 
-    List<Resource> resources = bundle.getEntry().stream().map(entry -> entry.getResource()).toList();
+  public BbmriBundleToBeaconProcessor(FhirResourceMapper mapper) {
+    this.mapper = mapper;
+  }
 
-    Bundle outputBundle = new Bundle().setType(BundleType.TRANSACTION);
-    outputBundle.setId(UUID.randomUUID().toString());
-    List<Resource> outputResources = new LinkedList<>();
-    add(resources, outputResources);
-    build(outputBundle, outputResources);
+  public BeaconIndividuals process(final Bundle bundle) {
+    System.out.println("BbmriBundleToBeaconProcessor.process; entered");
 
-    return outputBundle;
+//    List<Resource> resources = bundle.getEntry().stream().map(entry -> entry.getResource()).toList();
+//
+//    Bundle outputBundle = new Bundle().setType(BundleType.TRANSACTION);
+//    outputBundle.setId(UUID.randomUUID().toString());
+//    List<Resource> outputResources = new LinkedList<>();
+//    add(resources, outputResources);
+//    build(outputBundle, outputResources);
+
+    System.out.println("BbmriBundleToBeaconProcessor.process; extract Beacon individuals");
+    Bbmri2BeaconIndividual bbmri2BeaconIndividual = new Bbmri2BeaconIndividual();
+    BeaconIndividuals beaconIndividuals =null;
+    try {
+      beaconIndividuals = bbmri2BeaconIndividual.transfer(bundle);
+    } catch (Exception e) {
+    }
+    System.out.println("BbmriBundleToBeaconProcessor.process; extracted Beacon individuals");
+
+    return beaconIndividuals;
   }
 
   private void add(Collection<? extends Resource> resources, List<Resource> outputResources) {

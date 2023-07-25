@@ -3,9 +3,14 @@ fhir:
     url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
   output:
     url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
+beacon:
+  mongoHost: ${MONGO_HOST:mongo}
+  mongoPort: ${MONGO_PORT:27017}
+  mongoUser: ${MONGO_USER:}
+  mongoPass: ${MONGO_PASS:}
 data:
   outputFileDirectory: ./test
-  writeBundlesToFile: false
+  writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}
 spring:
   profiles:
     active:
