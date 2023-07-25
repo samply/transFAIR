@@ -4,7 +4,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.util.HashMap;
 
+import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
+import de.samply.transfair.processor.BbmriBundleToBeaconProcessor;
 import de.samply.transfair.reader.*;
+import de.samply.transfair.writer.BeaconIndividualWriter;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
 import org.springframework.batch.core.Job;
@@ -22,7 +25,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.transaction.PlatformTransactionManager;
 import ca.uhn.fhir.context.FhirContext;
-import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.mapper.FhirResourceMapper;
 import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiConditionMapper;
 import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiObservationMapper;
@@ -38,12 +40,12 @@ import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriPatientMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriResourceMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriSpecimenMapper;
 import de.samply.transfair.processor.FhirBundleProcessor;
-import de.samply.transfair.processor.ReferenceStrippingFhirBundleProcessor;
 import de.samply.transfair.reader.FhirConditionReader;
 import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirSpecimenReader;
 import de.samply.transfair.writer.FhirBundleWriter;
+import de.samply.transfair.models.beacon.BeaconIndividuals;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
@@ -115,6 +117,7 @@ public class BatchConfiguration {
   @Bean
   @Profile("bbmri2beacon")
   public FhirResourceMapper bbmriToBeaconMapper() {
+    // FHIR to Beacon conversion does not need a mapper, but without it, invisible Spring magic stops working.
     System.out.println("BatchConfiguration.bbmriToBeaconMapper: entered, this.class: " + this.getClass().getName());
     return new FhirBbmriToBeaconResourceMapper();
   }
@@ -147,14 +150,14 @@ public class BatchConfiguration {
 
   @Bean
   public FhirBundleProcessor processor(FhirResourceMapper mapper) {
+    System.out.println("BatchConfiguration.processor: entered, this.class: " + this.getClass().getName());
     return new FhirBundleProcessor(mapper);
   }
 
-
   @Bean
-  public ReferenceStrippingFhirBundleProcessor referenceStrippingProcessor(FhirResourceMapper mapper) {
+  public BbmriBundleToBeaconProcessor referenceStrippingProcessor(FhirResourceMapper mapper) {
     System.out.println("BatchConfiguration.referenceStrippingProcessor: entered, this.class: " + this.getClass().getName());
-    return new ReferenceStrippingFhirBundleProcessor();
+    return new BbmriBundleToBeaconProcessor(mapper);
   }
 
 
@@ -166,8 +169,8 @@ public class BatchConfiguration {
 
   @Bean
   @StepScope
-  public ItemWriter<Bundle> referenceStrippingWriter() {
-    return new FhirBundleWriter(ctx.newRestfulGenericClient(fhirProperties.getOutput().getUrl()));
+  public ItemWriter<BeaconIndividuals> referenceStrippingWriter() {
+    return new BeaconIndividualWriter();
   }
 
   @Bean
@@ -336,10 +339,10 @@ public class BatchConfiguration {
   @Profile("bbmri2beacon")
   public Step stepBbmri2beaconPatient(JobRepository jobRepository,
                                       PlatformTransactionManager transactionManager,
-                                      ReferenceStrippingFhirBundleProcessor referenceStrippingProcessor) {
+                                      BbmriBundleToBeaconProcessor referenceStrippingProcessor) {
     System.out.println("stepBbmri2beaconPatient: entered");
     return new StepBuilder("stepBbmri2beaconPatient", jobRepository)
-            .<Bundle, Bundle> chunk(10, transactionManager)
+            .<Bundle, BeaconIndividuals> chunk(10, transactionManager)
             .reader(patientReader())
             .processor(referenceStrippingProcessor)
             .writer(referenceStrippingWriter())

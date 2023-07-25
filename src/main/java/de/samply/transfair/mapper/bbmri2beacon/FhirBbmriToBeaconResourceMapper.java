@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Profile;
 
 import java.util.List;
 
+// FHIR to Beacon conversion does not need a mapper, but without it, invisible Spring magic stops working.
+
 @Profile("copy")
 @Slf4j
 public class FhirBbmriToBeaconResourceMapper implements FhirResourceMapper {

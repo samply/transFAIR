@@ -51,11 +51,17 @@
 			<version>6.4.3</version>
 		</dependency>
 
-	<dependency>
-		<groupId>ca.uhn.hapi.fhir</groupId>
-		<artifactId>hapi-fhir-structures-r4</artifactId>
-		<version>5.4.2</version>
-	</dependency>
+		<dependency>
+			<groupId>ca.uhn.hapi.fhir</groupId>
+			<artifactId>hapi-fhir-structures-r4</artifactId>
+			<version>5.4.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.mongodb</groupId>
+			<artifactId>mongo-java-driver</artifactId>
+			<version>3.12.14</version>
+		</dependency>
 	</dependencies>
 
 	<build>
