@@ -69,7 +69,7 @@
                     "target": [
                         {
                             "code": "119361006",
-                            "display": "Blood Plasma",
+                            "display": "Plasma specimen",
                             "equivalence": "equivalent"
                         }
                     ]
@@ -79,7 +79,7 @@
                     "target": [
                         {
                             "code": "119361006",
-                            "display": "Blood Plasma",
+                            "display": "Plasma specimen",
                             "equivalence": "wider"
                         }
                     ]
@@ -89,7 +89,7 @@
                     "target": [
                         {
                             "code": "119361006",
-                            "display": "Blood Plasma",
+                            "display": "Plasma specimen",
                             "equivalence": "wider"
                         }
                     ]
@@ -118,8 +118,8 @@
                     "code": "plasma-heparin",
                     "target": [
                         {
-                            "code": "446272009",
-                            "display": "Plasma Heparin",
+                            "code": "119361006",
+                            "display": "Plasma specimen",
                             "equivalence": "equivalent"
                         }
                     ]
@@ -279,8 +279,8 @@
                     "target": [
                         {
                             "code": "119376003",
-                            "display": "Other tissue sample",
-                            "equivalence": "equivalent"
+                            "display": "Tissue specimen",
+                            "equivalence": "wider"
                         }
                     ]
                 },
@@ -289,7 +289,7 @@
                     "target": [
                         {
                             "code": "258566005",
-                            "display": "DNA",
+                            "display": "Deoxyribonucleic acid specimen",
                             "equivalence": "equivalent"
                         }
                     ]
@@ -308,9 +308,9 @@
                     "code": "g-dna",
                     "target": [
                         {
-                            "code": "18470003",
-                            "display": "g-DNA",
-                            "equivalence": "equivalent"
+                            "code": "258566005",
+                            "display": "Deoxyribonucleic acid specimen",
+                            "equivalence": "wider"
                         }
                     ]
                 },
