@@ -6,7 +6,7 @@ import java.util.HashMap;
 
 import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.processor.BbmriBundleToBeaconProcessor;
-import de.samply.transfair.reader.*;
+import de.samply.transfair.reader.FhirPatientReader;
 import de.samply.transfair.writer.BeaconIndividualWriter;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
@@ -118,7 +118,6 @@ public class BatchConfiguration {
   @Profile("bbmri2beacon")
   public FhirResourceMapper bbmriToBeaconMapper() {
     // FHIR to Beacon conversion does not need a mapper, but without it, invisible Spring magic stops working.
-    System.out.println("BatchConfiguration.bbmriToBeaconMapper: entered, this.class: " + this.getClass().getName());
     return new FhirBbmriToBeaconResourceMapper();
   }
 
@@ -150,13 +149,11 @@ public class BatchConfiguration {
 
   @Bean
   public FhirBundleProcessor processor(FhirResourceMapper mapper) {
-    System.out.println("BatchConfiguration.processor: entered, this.class: " + this.getClass().getName());
     return new FhirBundleProcessor(mapper);
   }
 
   @Bean
   public BbmriBundleToBeaconProcessor referenceStrippingProcessor(FhirResourceMapper mapper) {
-    System.out.println("BatchConfiguration.referenceStrippingProcessor: entered, this.class: " + this.getClass().getName());
     return new BbmriBundleToBeaconProcessor(mapper);
   }
 
@@ -340,7 +337,6 @@ public class BatchConfiguration {
   public Step stepBbmri2beaconPatient(JobRepository jobRepository,
                                       PlatformTransactionManager transactionManager,
                                       BbmriBundleToBeaconProcessor referenceStrippingProcessor) {
-    System.out.println("stepBbmri2beaconPatient: entered");
     return new StepBuilder("stepBbmri2beaconPatient", jobRepository)
             .<Bundle, BeaconIndividuals> chunk(10, transactionManager)
             .reader(patientReader())
@@ -389,7 +385,6 @@ public class BatchConfiguration {
   @Bean
   @Profile("bbmri2beacon")
   public Job bbmriToBeaconJob(JobRepository jobRepository, Step stepBbmri2beaconPatient) {
-    System.out.println("bbmriToBeaconJob: entered");
     return new JobBuilder("bbmriToBeaconJob", jobRepository)
             .incrementer(new RunIdIncrementer())
             .start(stepBbmri2beaconPatient)

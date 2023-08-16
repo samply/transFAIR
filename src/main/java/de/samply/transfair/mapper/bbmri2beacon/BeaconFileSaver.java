@@ -4,7 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.*;
+import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,22 +28,6 @@ public class BeaconFileSaver {
    * @param pathname Path to the directory where the file should be stored.
    * @param filename Name of the file where the data will be dumped.
    */
-//  public static void export(Object data, String pathname, String filename) {
-//    BeaconFileSaver beaconFileSaver = new BeaconFileSaver();
-//    Path path = Path.of(pathname);
-//    Path filepath = path.resolve(filename);
-//    log.info("export: filepath=" + filepath);
-//    try {
-//      FileWriter myWriter = new FileWriter(filepath.toFile());
-//      String output = new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(data);
-//      myWriter.write(output);
-//      myWriter.close();
-//    } catch (IOException e) {
-//      log.error("An error occurred while writing output to file " + filepath);
-//      e.printStackTrace();
-//    }
-//  }
-
     public static void export(Object data, String pathname, String filename) {
       Path path = Path.of(pathname);
       Path filepath = path.resolve(filename);

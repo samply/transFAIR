@@ -27,7 +27,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * This mapping transfers patient-related data from one blaze with bbmri to an
@@ -41,8 +40,7 @@ public class Bbmri2BeaconIndividual {
   /**
    * Transfer data relating to patients from FHIR to Beacon.
    */
-  public BeaconIndividuals transfer(Bundle bundle)
-      throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
+  public BeaconIndividuals transfer(Bundle bundle) {
     BeaconIndividuals beaconIndividuals = new BeaconIndividuals();
 
     int patientCount = 0;
@@ -51,7 +49,6 @@ public class Bbmri2BeaconIndividual {
       if (resource instanceof Patient) {
         Patient patient = (Patient) resource;
         String patientId = transferId(patient);
-        System.out.println("Patient ID: " + patientId);
         beaconIndividuals.add(transferIndividual(patient));
         patientCount++;
       }
@@ -69,10 +66,8 @@ public class Bbmri2BeaconIndividual {
    * @param pid ID of a patient in FHIR store.
    * @return Beacon individual.
    */
-  public BeaconIndividual transferIndividual(Patient patient)
-      throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
-
-    return transferIndividual(patient, null);
+  public BeaconIndividual transferIndividual(Patient patient) {
+    return transferIndividual(patient, new ArrayList<IBaseResource>());
   }
 
   /**
@@ -88,8 +83,7 @@ public class Bbmri2BeaconIndividual {
     String bbmriGender = patient.getGender().getDisplay();
     beaconIndividual.sex = BbmriBeaconSexConverter.fromBbmriToBeacon(bbmriGender);
     beaconIndividual.geographicOrigin = transferAddress(patient);
-    if (observations != null)
-      beaconIndividual.measures = transferObservations(observations);
+    beaconIndividual.measures = transferObservations(observations);
 
     return beaconIndividual;
   }
