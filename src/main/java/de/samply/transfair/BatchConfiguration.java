@@ -6,7 +6,11 @@ import java.util.HashMap;
 
 import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.processor.BbmriBundleToBeaconProcessor;
+<<<<<<< HEAD
 import de.samply.transfair.reader.FhirPatientReader;
+=======
+import de.samply.transfair.reader.*;
+>>>>>>> 4b89ddf193cf06485368a929a8c153cd69445db6
 import de.samply.transfair.writer.BeaconIndividualWriter;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
