@@ -1,6 +1,6 @@
 package de.samply.transfair.idmanagement.connectors.enums;
 
-import de.samply.transfair.converters.IdMapper;
+import de.samply.transfair.idmanagement.IdMapper;
 
 /**
  * Used in class {@link this.set_mapping} to define the FHIR resource type that an id belong to. See

@@ -50,6 +50,11 @@
 			<artifactId>hapi-fhir-client</artifactId>
 			<version>6.4.3</version>
 		</dependency>
+		<dependency>
+            <groupId>com.googlecode.json-simple</groupId>
+            <artifactId>json-simple</artifactId>
+            <version>1.1.1</version>
+        </dependency>
 
 	<dependency>
 		<groupId>ca.uhn.hapi.fhir</groupId>

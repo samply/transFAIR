@@ -3,6 +3,13 @@ fhir:
     url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
   output:
     url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
+id:
+  bbmridomain: ${ID_BBMRIDOMAIN:default}
+  miidomain: ${ID_MIIDOMAIN:default}
+  setting: ${ID_SETTING:none}
+  csvpath:  ${ID_CSVPATH:default}
+  csvfilename: ${ID_CSVFILENAME:default}
+     
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: false
