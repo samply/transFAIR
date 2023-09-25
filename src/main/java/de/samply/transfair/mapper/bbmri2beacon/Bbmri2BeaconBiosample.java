@@ -25,13 +25,6 @@ import org.hl7.fhir.r4.model.Specimen;
  */
 @Slf4j
 public class Bbmri2BeaconBiosample {
-//  private FhirComponent fhirComponent;
-//  private BeaconBiosamples beaconBiosamples;
-//
-//  public Bbmri2BeaconBiosample(FhirComponent fhirComponent) {
-//    this.fhirComponent = fhirComponent;
-//  }
-//
   /**
    * Transfer data relating to samples from FHIR to Beacon.
    */
@@ -53,21 +46,6 @@ public class Bbmri2BeaconBiosample {
 
     return beaconBiosamples;
   }
-
-//  /**
-//   * Create an object encapsulating a Beacon biosample, based on a Specimen in the FHIR store.
-//   *
-//   * @param sid ID of a specimen in FHIR store.
-//   * @return Beacon biosample.
-//   */
-//  public BeaconBiosample transferBiosample(String sid) {
-//    log.info("Loading data for sample " + sid);
-//
-//    Specimen specimen = fhirComponent.transferController.fetchResource(
-//            fhirComponent.getSourceFhirServer(), Specimen.class, sid);
-//
-//    return transferBiosample(specimen);
-//  }
 
   /**
    * Create an object encapsulating a Beacon biosample, based on a Specimen in the FHIR store.
