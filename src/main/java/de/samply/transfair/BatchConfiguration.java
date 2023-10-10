@@ -122,6 +122,12 @@ public class BatchConfiguration {
   }
 
   @Bean
+  @Profile("imgmeta2imgmeta")
+  public FhirResourceMapper imgmetaToImgmetaMapper() {
+    return new FhirCopyResourceMapper();
+  }
+
+  @Bean
   public ItemReader<Bundle> organizationReader() {
     return new FhirOrganizationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
@@ -345,6 +351,19 @@ public class BatchConfiguration {
             .build();
   }
 
+  @Bean
+  @Profile("imgmeta2imgmeta")
+  public Step stepImgmetaToImgmetaOrganization(JobRepository jobRepository,
+                                         PlatformTransactionManager transactionManager,
+                                         FhirBundleProcessor processor) {
+    return new StepBuilder("stepImgmetaToImgmetaOrganization", jobRepository)
+            .<Bundle, Bundle> chunk(10, transactionManager)
+            .reader(organizationReader())
+            .processor(processor)
+            .writer(writer())
+            .build();
+  }
+
 
   @Bean
   @Profile("bbmri2mii")
@@ -388,6 +407,15 @@ public class BatchConfiguration {
     return new JobBuilder("bbmriToBeaconJob", jobRepository)
             .incrementer(new RunIdIncrementer())
             .start(stepBbmri2beaconPatient)
+            .build();
+  }
+
+  @Bean
+  @Profile("imgmeta2imgmeta")
+  public Job imgmetaToImgmetaJob(JobRepository jobRepository, Step stepImgmetaToImgmetaOrganization) {
+    return new JobBuilder("imgmetaToImgmetaJob", jobRepository)
+            .incrementer(new RunIdIncrementer())
+            .start(stepImgmetaToImgmetaOrganization)
             .build();
   }
 
