@@ -9,15 +9,15 @@ import org.springframework.batch.item.ItemProcessor;
 
 @Slf4j
 /**
- * BbmriBundleToBeaconProcessor is an implementation of ItemProcessor that converts a FHIR Bundle to BeaconIndividuals.
+ * BbmriBundleToBeaconIndividualProcessor is an implementation of ItemProcessor that converts a FHIR Bundle to BeaconIndividuals.
  */
-public class BbmriBundleToBeaconProcessor implements ItemProcessor<Bundle, BeaconIndividuals> {
+public class BbmriBundleToBeaconIndividualProcessor implements ItemProcessor<Bundle, BeaconIndividuals> {
   /**
    * Constructor.
    *
    * @param mapper Not used, set this argument to null.
    */
-  public BbmriBundleToBeaconProcessor(FhirResourceMapper mapper) {
+  public BbmriBundleToBeaconIndividualProcessor(FhirResourceMapper mapper) {
     // FHIR to Beacon conversion does not need a mapper, but without it, invisible Spring magic stops working.
   }
 

@@ -5,9 +5,11 @@ import java.io.FileNotFoundException;
 import java.util.HashMap;
 
 import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
-import de.samply.transfair.processor.BbmriBundleToBeaconProcessor;
+import de.samply.transfair.processor.BbmriBundleToBeaconIndividualProcessor;
+import de.samply.transfair.processor.BbmriBundleToBeaconBiosampleProcessor;
 import de.samply.transfair.reader.FhirPatientReader;
 import de.samply.transfair.writer.BeaconIndividualWriter;
+import de.samply.transfair.writer.BeaconBiosampleWriter;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
 import org.springframework.batch.core.Job;
@@ -46,6 +48,7 @@ import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirSpecimenReader;
 import de.samply.transfair.writer.FhirBundleWriter;
 import de.samply.transfair.models.beacon.BeaconIndividuals;
+import de.samply.transfair.models.beacon.BeaconBiosamples;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
@@ -159,8 +162,13 @@ public class BatchConfiguration {
   }
 
   @Bean
-  public BbmriBundleToBeaconProcessor referenceStrippingProcessor(FhirResourceMapper mapper) {
-    return new BbmriBundleToBeaconProcessor(mapper);
+  public BbmriBundleToBeaconIndividualProcessor bbmriBundleToBeaconIndividualProcessor(FhirResourceMapper mapper) {
+    return new BbmriBundleToBeaconIndividualProcessor(mapper);
+  }
+
+  @Bean
+  public BbmriBundleToBeaconBiosampleProcessor bbmriBundleToBeaconBiosampleProcessor(FhirResourceMapper mapper) {
+    return new BbmriBundleToBeaconBiosampleProcessor(mapper);
   }
 
 
@@ -172,8 +180,14 @@ public class BatchConfiguration {
 
   @Bean
   @StepScope
-  public ItemWriter<BeaconIndividuals> referenceStrippingWriter() {
+  public ItemWriter<BeaconIndividuals> beaconIndividualWriter() {
     return new BeaconIndividualWriter();
+  }
+
+  @Bean
+  @StepScope
+  public ItemWriter<BeaconBiosamples> beaconBiosampleWriter() {
+    return new BeaconBiosampleWriter();
   }
 
   @Bean
@@ -342,12 +356,25 @@ public class BatchConfiguration {
   @Profile("bbmri2beacon")
   public Step stepBbmri2beaconPatient(JobRepository jobRepository,
                                       PlatformTransactionManager transactionManager,
-                                      BbmriBundleToBeaconProcessor referenceStrippingProcessor) {
+                                      BbmriBundleToBeaconIndividualProcessor bbmriBundleToBeaconIndividualProcessor) {
     return new StepBuilder("stepBbmri2beaconPatient", jobRepository)
             .<Bundle, BeaconIndividuals> chunk(10, transactionManager)
             .reader(patientReader())
-            .processor(referenceStrippingProcessor)
-            .writer(referenceStrippingWriter())
+            .processor(bbmriBundleToBeaconIndividualProcessor)
+            .writer(beaconIndividualWriter())
+            .build();
+  }
+
+  @Bean
+  @Profile("bbmri2beacon")
+  public Step stepBbmri2beaconSample(JobRepository jobRepository,
+                                      PlatformTransactionManager transactionManager,
+                                     BbmriBundleToBeaconBiosampleProcessor bbmriBundleToBeaconBiosampleProcessor) {
+    return new StepBuilder("stepBbmri2beaconSample", jobRepository)
+            .<Bundle, BeaconBiosamples> chunk(10, transactionManager)
+            .reader(specimenReader())
+            .processor(bbmriBundleToBeaconBiosampleProcessor)
+            .writer(beaconBiosampleWriter())
             .build();
   }
 
@@ -403,10 +430,11 @@ public class BatchConfiguration {
 
   @Bean
   @Profile("bbmri2beacon")
-  public Job bbmriToBeaconJob(JobRepository jobRepository, Step stepBbmri2beaconPatient) {
+  public Job bbmriToBeaconJob(JobRepository jobRepository, Step stepBbmri2beaconPatient, Step stepBbmri2beaconSample) {
     return new JobBuilder("bbmriToBeaconJob", jobRepository)
             .incrementer(new RunIdIncrementer())
             .start(stepBbmri2beaconPatient)
+            .next(stepBbmri2beaconSample)
             .build();
   }
 
