@@ -7,7 +7,12 @@ import java.util.HashMap;
 import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.processor.BbmriBundleToBeaconIndividualProcessor;
 import de.samply.transfair.processor.BbmriBundleToBeaconBiosampleProcessor;
+import de.samply.transfair.reader.FhirConditionReader;
+import de.samply.transfair.reader.FhirImagingStudyReader;
+import de.samply.transfair.reader.FhirObservationReader;
+import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirPatientReader;
+import de.samply.transfair.reader.FhirSpecimenReader;
 import de.samply.transfair.writer.BeaconIndividualWriter;
 import de.samply.transfair.writer.BeaconBiosampleWriter;
 import org.hl7.fhir.r4.model.Bundle;
@@ -42,10 +47,6 @@ import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriPatientMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriResourceMapper;
 import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriSpecimenMapper;
 import de.samply.transfair.processor.FhirBundleProcessor;
-import de.samply.transfair.reader.FhirConditionReader;
-import de.samply.transfair.reader.FhirObservationReader;
-import de.samply.transfair.reader.FhirOrganizationReader;
-import de.samply.transfair.reader.FhirSpecimenReader;
 import de.samply.transfair.writer.FhirBundleWriter;
 import de.samply.transfair.models.beacon.BeaconIndividuals;
 import de.samply.transfair.models.beacon.BeaconBiosamples;
@@ -125,8 +126,8 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("imgmeta2imgmeta")
-  public FhirResourceMapper imgmetaToImgmetaMapper() {
+  @Profile("dicom2fhir")
+  public FhirResourceMapper dicomToFhirMapper() {
     return new FhirCopyResourceMapper();
   }
 
@@ -139,7 +140,7 @@ public class BatchConfiguration {
   public ItemReader<Bundle> conditionReader() {
     return new FhirConditionReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
-  
+
   @Bean
   public ItemReader<Bundle> observationReader() {
     return new FhirObservationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
@@ -153,6 +154,11 @@ public class BatchConfiguration {
   @Bean
   public ItemReader<Bundle> patientReader() {
     return new FhirPatientReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+  }
+
+  @Bean
+  public ItemReader<Bundle> imagingStudyReader() {
+    return new FhirImagingStudyReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
 
 
@@ -202,7 +208,7 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
+
   @Bean
   @Profile("bbmri2mii")
   public Step stepBbmriToMiiCondition(JobRepository jobRepository,
@@ -215,8 +221,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("bbmri2mii")
   public Step stepBbmriToMiiObservation(JobRepository jobRepository,
@@ -229,8 +235,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("bbmri2mii")
   public Step stepBbmriToMiiSpecimen(JobRepository jobRepository,
@@ -256,7 +262,7 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
+
   @Bean
   @Profile("mii2bbmri")
   public Step stepMiiToBbmriCondition(JobRepository jobRepository,
@@ -269,8 +275,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("mii2bbmri")
   public Step stepMiiToBbmriObservation(JobRepository jobRepository,
@@ -283,8 +289,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("mii2bbmri")
   public Step stepMiiToBbmriSpecimen(JobRepository jobRepository,
@@ -297,7 +303,7 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
+
   @Bean
   @Profile("fhircopy")
   public Step copyOrganization(JobRepository jobRepository,
@@ -323,8 +329,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("fhircopy")
   public Step copyObservation(JobRepository jobRepository,
@@ -337,8 +343,8 @@ public class BatchConfiguration {
         .writer(writer())
         .build();
   }
-  
-  
+
+
   @Bean
   @Profile("fhircopy")
   public Step copySpecimen(JobRepository jobRepository,
@@ -379,13 +385,13 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("imgmeta2imgmeta")
-  public Step stepImgmetaToImgmetaOrganization(JobRepository jobRepository,
+  @Profile("dicom2fhir")
+  public Step stepDicomToFhirImagingStudy(JobRepository jobRepository,
                                          PlatformTransactionManager transactionManager,
                                          FhirBundleProcessor processor) {
-    return new StepBuilder("stepImgmetaToImgmetaOrganization", jobRepository)
+    return new StepBuilder("stepDicomToFhirImagingStudy", jobRepository)
             .<Bundle, Bundle> chunk(10, transactionManager)
-            .reader(organizationReader())
+            .reader(imagingStudyReader())
             .processor(processor)
             .writer(writer())
             .build();
@@ -403,7 +409,7 @@ public class BatchConfiguration {
         .next(stepBbmriToMiiSpecimen)
         .build();
   }
-  
+
   @Bean
   @Profile("mii2bbmri")
   public Job miiToBbmriJob(JobRepository jobRepository, Step stepMiiToBbmriCondition, Step stepMiiToBbmriOrganization, Step stepMiiToBbmriObservation, Step stepMiiToBbmriSpecimen) {
@@ -439,11 +445,11 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("imgmeta2imgmeta")
-  public Job imgmetaToImgmetaJob(JobRepository jobRepository, Step stepImgmetaToImgmetaOrganization) {
-    return new JobBuilder("imgmetaToImgmetaJob", jobRepository)
+  @Profile("dicom2fhir")
+  public Job dicomToFhirJob(JobRepository jobRepository, Step stepDicomToFhirImagingStudy) {
+    return new JobBuilder("dicomToFhirJob", jobRepository)
             .incrementer(new RunIdIncrementer())
-            .start(stepImgmetaToImgmetaOrganization)
+            .start(stepDicomToFhirImagingStudy)
             .build();
   }
 

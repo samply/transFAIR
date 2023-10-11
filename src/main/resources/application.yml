@@ -8,6 +8,10 @@ beacon:
   mongoPort: ${MONGO_PORT:27017}
   mongoUser: ${MONGO_USER:}
   mongoPass: ${MONGO_PASS:}
+imgmeta:
+  fromFhir: ${IMGMETA_FROM_FHIR:true}
+  dicomWebUrl: ${IMGMETA_DICOM_WEB_URL:}
+  dicomFilePath: ${IMGMETA_DICOM_FILE_PATH:}
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}
