@@ -79,17 +79,4 @@ public class CollectDicomAttributesFromWebClient {
 
         return attributesList;
     }
-//
-//    /**
-//     * Prints a list of Attributes objects.
-//     *
-//     * @param attributesList the list of Attributes objects to be printed
-//     */
-//    public void printAttributesList(List<Attributes> attributesList) {
-//        if (attributesList == null)
-//            return;
-//        for (Attributes attributes : attributesList) {
-//            System.out.println(attributes);
-//        }
-//    }
 }
