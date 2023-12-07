@@ -1,7 +1,8 @@
 package de.samply.transfair.idmanagement;
 
 
-import de.samply.transfair.configuration.Configuration;
+import org.springframework.beans.factory.annotation.Autowired;
+import de.samply.transfair.PseudonymisationProperties;
 import de.samply.transfair.idmanagement.connectors.CsvMapping;
 import de.samply.transfair.idmanagement.connectors.IdMapping;
 import de.samply.transfair.idmanagement.connectors.IdentityMapping;
@@ -9,7 +10,7 @@ import de.samply.transfair.idmanagement.connectors.MainzellisteMapping;
 //import de.samply.transfair.idmanagement.connectors.MosaicMapping;
 import de.samply.transfair.idmanagement.connectors.enums.ResourceType;
 import de.samply.transfair.idmanagement.connectors.exceptions.IdMappingException;
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -25,19 +26,20 @@ public class IdMapper {
 
   private IdMapping idMapping;
 
-  Configuration configuration;
+  @Autowired
+  private PseudonymisationProperties pseudonymisationProperties;
 
   /** New Idmapper. */
-  public IdMapper(Configuration configuration) {
-    this.configuration = configuration;
-    this.mapperSetting = this.configuration.getIdMapperSetting();
-    this.patientPseudonymDomainBbmri = this.configuration.getBbmriIdDomain();
-    this.patientPseudonymDomainMii = this.configuration.getMiiIdDomain();
+  public IdMapper(PseudonymisationProperties pseudonymisationProperties) {
+    this.pseudonymisationProperties = pseudonymisationProperties;
+    this.mapperSetting = this.pseudonymisationProperties.getSetting();
+    this.patientPseudonymDomainBbmri = this.pseudonymisationProperties.getBbmridomain();
+    this.patientPseudonymDomainMii = this.pseudonymisationProperties.getMiidomain();
 
-    if (this.configuration.getIdMapperSetting().equals("csvmapping")) {
-      log.info("Using csvmapping " + configuration.getIdMappingCsvPath());
-      this.idMapping = new CsvMapping(configuration.getIdMappingCsvPath());
-    } else if (this.configuration.getIdMapperSetting().equals("none")) {
+    if (this.pseudonymisationProperties.getSetting().equals("csvmapping")) {
+      log.info("Using csvmapping " + pseudonymisationProperties.getCsvpath());
+      this.idMapping = new CsvMapping(pseudonymisationProperties.getCsvpath());
+    } else if (this.pseudonymisationProperties.getSetting().equals("none")) {
       log.info("No ID-Mapping used");
     } else {
       // If none of the above settings is matched

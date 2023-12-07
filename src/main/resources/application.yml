@@ -3,6 +3,7 @@ fhir:
     url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
   output:
     url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
+
 beacon:
   mongoHost: ${MONGO_HOST:mongo}
   mongoPort: ${MONGO_PORT:27017}
@@ -12,6 +13,14 @@ imgmeta:
   fromFhir: ${IMGMETA_FROM_FHIR:true}
   dicomWebUrl: ${IMGMETA_DICOM_WEB_URL:}
   dicomFilePath: ${IMGMETA_DICOM_FILE_PATH:}
+
+id:
+  bbmridomain: ${ID_BBMRIDOMAIN:default}
+  miidomain: ${ID_MIIDOMAIN:default}
+  setting: ${ID_SETTING:none}
+  csvpath:  ${ID_CSVPATH:default}
+  csvfilename: ${ID_CSVFILENAME:default}
+
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}
