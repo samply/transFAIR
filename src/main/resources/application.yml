@@ -15,11 +15,11 @@ imgmeta:
   dicomFilePath: ${IMGMETA_DICOM_FILE_PATH:}
 
 id:
-  bbmridomain: ${ID_BBMRIDOMAIN:default}
-  miidomain: ${ID_MIIDOMAIN:default}
+  bbmridomain: ${ID_BBMRIDOMAIN}
+  miidomain: ${ID_MIIDOMAIN}
   setting: ${ID_SETTING:none}
-  csvpath:  ${ID_CSVPATH:default}
-  csvfilename: ${ID_CSVFILENAME:default}
+  csvpath:  ${ID_CSVPATH}
+  csvfilename: ${ID_CSVFILENAME}
 
 data:
   outputFileDirectory: ./test

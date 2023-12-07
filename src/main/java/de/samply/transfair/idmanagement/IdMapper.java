@@ -41,6 +41,7 @@ public class IdMapper {
       this.idMapping = new CsvMapping(pseudonymisationProperties.getCsvpath());
     } else if (this.pseudonymisationProperties.getSetting().equals("none")) {
       log.info("No ID-Mapping used");
+      this.idMapping = new IdentityMapping();
     } else {
       // If none of the above settings is matched
       log.info("No ID-Mappings defined");
