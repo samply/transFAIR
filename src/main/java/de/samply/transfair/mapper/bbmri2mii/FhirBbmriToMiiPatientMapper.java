@@ -9,7 +9,7 @@ import org.hl7.fhir.r4.model.Resource;
 public class FhirBbmriToMiiPatientMapper extends FhirBbmriToMiiMapper {
 
 
-  private static final String BBMRI_PROFILE_PATIENT = "https://fhir.simplifier.net/bbmri.de/StructureDefinition/Patient";
+  private static final String MII_PROFILE_PATIENT = "https://simplifier.net/medizininformatikinitiative-modulperson/mii_pr_person_patient";
 
   public FhirBbmriToMiiPatientMapper(
       HashMap<String, String> icd10Snomed, HashMap<String, String> sampleTypeSnomed) {
@@ -23,7 +23,7 @@ public class FhirBbmriToMiiPatientMapper extends FhirBbmriToMiiMapper {
     Patient out = in.copy();
     
 
-    out.setMeta(new Meta().addProfile(BBMRI_PROFILE_PATIENT));
+    out.setMeta(new Meta().addProfile(MII_PROFILE_PATIENT));
 
 
     return List.of(out);

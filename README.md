@@ -29,16 +29,20 @@ TransFAIR is shipped with so-called ETL profiles. Currently, these are:
 - `fhircopy` - transfer FHIR resources Organization, Condition, Observation, Specimen, as well as Patients referenced in them unchanged from one FHIR server to another. This can be used to perform filtering and/or pseudonymisation across servers.
 - `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset).
 - `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/façade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead.
+- `dicom2fhir` - load data from a DICOM source, transform into ImagingStudy resources and load into a target FHIR store.
 
 ## Configuration
 
 TransFAIR is configured using environment variables:
 
-| Variable                                  | Description                                                                                                   | Default                                                            |
-|-------------------------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
-| `FHIR_INPUT_URL`                          | HTTP Address of the `SOURCE` datastore                                                                        | http://localhost:8080/fhir                                                         |
-| `FHIR_OUTPUT_URL`                         | HTTP Address of the `TARGET` datastore                                                                        | http://localhost:8090/fhir                                                         |                                                                                         |                                                                    |
-| `PROFILE`                                 | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles))                                    | mii2bbmri                                                         |                                                       |                              |
+| Variable                                  | Description                                                                | Default                    |
+|-------------------------------------------|----------------------------------------------------------------------------|----------------------------|
+| `FHIR_INPUT_URL`                          | HTTP Address of the `SOURCE` datastore                                     | http://localhost:8080/fhir |
+| `FHIR_OUTPUT_URL`                         | HTTP Address of the `TARGET` datastore                                     | http://localhost:8090/fhir |                                                                                         |                                                                    |
+| `PROFILE`                                 | Identifier of the TransFAIR profile to execute (see [Profiles](#profiles)) | mii2bbmri                  |                                                       |                              |
+| `IMGMETA_FROM_FHIR`                       | Get DICOM metadata from the `SOURCE` datastore                             | true                       |                                                       |                              |
+| `IMGMETA_DICOM_WEB_URL`                   | Get DICOM metadata from the specified DICOM web URL                        |                            |                                                       |                              |
+| `IMGMETA_DICOM_FILE_PATH`                 | Get DICOM metadata from the specified DICOM file or directory              |                            |                                                       |                              |
 
 
 ## Setup a Development Environment
