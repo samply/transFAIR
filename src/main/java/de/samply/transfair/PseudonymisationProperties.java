@@ -9,10 +9,10 @@ import org.springframework.context.annotation.Configuration;
 @Data
 public class PseudonymisationProperties {
 
-  String bbmridomain;
-  String miidomain;
-  String setting;
-  String csvpath;
+  public String bbmridomain;
+  public String miidomain;
+  public String setting;
+  public String csvpath;
 
 }
 
