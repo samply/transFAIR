@@ -148,6 +148,12 @@ public class MainzellisteMapping extends IdMapping {
               + response.body());
     }
 
+    JSONArray completeResponse = (JSONArray) jsonParser.parse(response.body());
+    JSONObject lonelyPatient = (JSONObject) completeResponse.get(0);
+    JSONArray ids = (JSONArray) lonelyPatient.get("ids");
+    JSONObject lonelyId = (JSONObject) ids.get(0);
+    String tarId = (String) lonelyId.get("idString");
+    
     // 4. Delete the session
     request =
         HttpRequest.newBuilder()
@@ -169,12 +175,6 @@ public class MainzellisteMapping extends IdMapping {
               + "\n"
               + response.body());
     }
-
-    JSONArray completeResponse = (JSONArray) jsonParser.parse(response.body());
-    JSONObject lonelyPatient = (JSONObject) completeResponse.get(0);
-    JSONArray ids = (JSONArray) lonelyPatient.get("ids");
-    JSONObject lonelyId = (JSONObject) ids.get(0);
-    String tarId = (String) lonelyId.get("idString");
 
     return tarId;
   }
