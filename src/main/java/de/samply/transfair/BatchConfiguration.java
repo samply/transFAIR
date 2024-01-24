@@ -13,6 +13,7 @@ import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirPatientReader;
 import de.samply.transfair.reader.FhirSpecimenReader;
+import de.samply.transfair.reader.FhirAmtReader;
 import de.samply.transfair.writer.BeaconIndividualWriter;
 import de.samply.transfair.writer.BeaconBiosampleWriter;
 import org.hl7.fhir.r4.model.Bundle;
@@ -132,6 +133,12 @@ public class BatchConfiguration {
   }
 
   @Bean
+  @Profile("amt2fhir")
+  public FhirResourceMapper amtToFhirMapper() {
+    return new FhirCopyResourceMapper();
+  }
+
+  @Bean
   public ItemReader<Bundle> organizationReader() {
     return new FhirOrganizationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
@@ -159,6 +166,11 @@ public class BatchConfiguration {
   @Bean
   public ItemReader<Bundle> imagingStudyReader() {
     return new FhirImagingStudyReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+  }
+
+  @Bean
+  public ItemReader<Bundle> amtReader() {
+    return new FhirAmtReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
 
 
@@ -387,11 +399,24 @@ public class BatchConfiguration {
   @Bean
   @Profile("dicom2fhir")
   public Step stepDicomToFhirImagingStudy(JobRepository jobRepository,
-                                         PlatformTransactionManager transactionManager,
-                                         FhirBundleProcessor processor) {
+                                          PlatformTransactionManager transactionManager,
+                                          FhirBundleProcessor processor) {
     return new StepBuilder("stepDicomToFhirImagingStudy", jobRepository)
             .<Bundle, Bundle> chunk(10, transactionManager)
             .reader(imagingStudyReader())
+            .processor(processor)
+            .writer(writer())
+            .build();
+  }
+
+  @Bean
+  @Profile("amt2fhir")
+  public Step stepAmtToFhir(JobRepository jobRepository,
+                                          PlatformTransactionManager transactionManager,
+                                          FhirBundleProcessor processor) {
+    return new StepBuilder("stepAmtToFhir", jobRepository)
+            .<Bundle, Bundle> chunk(10, transactionManager)
+            .reader(amtReader())
             .processor(processor)
             .writer(writer())
             .build();
@@ -450,6 +475,15 @@ public class BatchConfiguration {
     return new JobBuilder("dicomToFhirJob", jobRepository)
             .incrementer(new RunIdIncrementer())
             .start(stepDicomToFhirImagingStudy)
+            .build();
+  }
+
+  @Bean
+  @Profile("amt2fhir")
+  public Job amtToFhirJob(JobRepository jobRepository, Step stepAmtToFhir) {
+    return new JobBuilder("amtToFhirJob", jobRepository)
+            .incrementer(new RunIdIncrementer())
+            .start(stepAmtToFhir)
             .build();
   }
 
