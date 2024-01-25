@@ -1,4 +1,4 @@
-package de.samply.transfair.reader.amt;
+package de.samply.transfair.reader.amr;
 
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * This is a utility class for constructing FHIR Observation resources and extensions
- * from data extracted from an AMT CSV file.
+ * from data extracted from an AMR CSV file.
  */
 public class ObservationBuilder extends ResourceBuilder {
     /**
@@ -56,7 +56,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param isolateId   The isolate ID value to be added to the extension.
      */
     private static void addIsolateIdExtension(Observation observation, String isolateId) {
-        observation.addExtension(createStringExtension(isolateId, "https://ecdc.amt/fhir/StructureDefinition/ObservationIsolateId"));
+        observation.addExtension(createStringExtension(isolateId, "https://ecdc.amr/fhir/StructureDefinition/ObservationIsolateId"));
     }
 
     /**
@@ -66,7 +66,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param dataSource  The data source value to be added to the extension.
      */
     private static void addDataSourceExtension(Observation observation, String dataSource) {
-        observation.addExtension(createStringExtension(dataSource, "https://ecdc.amt/fhir/StructureDefinition/ObservationDataSource"));
+        observation.addExtension(createStringExtension(dataSource, "https://ecdc.amr/fhir/StructureDefinition/ObservationDataSource"));
     }
 
     /**
@@ -76,7 +76,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param patientType The patient type value to be added to the extension.
      */
     private static void addPatientTypeExtension(Observation observation, String patientType) {
-        observation.addExtension(createStringExtension(patientType, "https://ecdc.amt/fhir/StructureDefinition/ObservationPatientType"));
+        observation.addExtension(createStringExtension(patientType, "https://ecdc.amr/fhir/StructureDefinition/ObservationPatientType"));
     }
 
     /**
@@ -86,7 +86,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param reportingCountry The reporting country value to be added to the extension.
      */
     private static void addReportingCountryExtension(Observation observation, String reportingCountry) {
-        observation.addExtension(createStringExtension(reportingCountry, "https://ecdc.amt/fhir/StructureDefinition/ObservationReportingCountry"));
+        observation.addExtension(createStringExtension(reportingCountry, "https://ecdc.amr/fhir/StructureDefinition/ObservationReportingCountry"));
     }
 
     /**
@@ -101,17 +101,17 @@ public class ObservationBuilder extends ResourceBuilder {
         CodeableConcept codeableConcept = new CodeableConcept();
         // Add coding for pathogen
         Coding pathogenCoding = new Coding();
-        pathogenCoding.setSystem("https://ecdc.amt/pathogen-codes"); // Replace with the actual system URI
+        pathogenCoding.setSystem("https://ecdc.amr/pathogen-codes"); // Replace with the actual system URI
         pathogenCoding.setCode(pathogen);
         codeableConcept.addCoding(pathogenCoding);
         // Add coding for antibiotic
         Coding antibioticCoding = new Coding();
-        antibioticCoding.setSystem("https://ecdc.amt/antibiotic-codes"); // Replace with the actual system URI
+        antibioticCoding.setSystem("https://ecdc.amr/antibiotic-codes"); // Replace with the actual system URI
         antibioticCoding.setCode(antibiotic);
         codeableConcept.addCoding(antibioticCoding);
         // Add coding for SIR
         Coding sirCoding = new Coding();
-        sirCoding.setSystem("https://ecdc.amt/sir-codes"); // Replace with the actual system URI
+        sirCoding.setSystem("https://ecdc.amr/sir-codes"); // Replace with the actual system URI
         sirCoding.setCode(sir);
         codeableConcept.addCoding(sirCoding);
 

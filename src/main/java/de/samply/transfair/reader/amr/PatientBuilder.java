@@ -1,4 +1,4 @@
-package de.samply.transfair.reader.amt;
+package de.samply.transfair.reader.amr;
 
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.IdType;
@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * This is a utility class for constructing FHIR Patient resources and extensions
- * from data extracted from an AMT CSV file.
+ * from data extracted from an AMR CSV file.
  */
 public class PatientBuilder extends ResourceBuilder {
     /**
@@ -70,7 +70,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param age     The age value to be added to the extension.
      */
     private static void addAgeExtension(Patient patient, String age) {
-        patient.addExtension(createIntegerExtension(age, "https://ecdc.amt/fhir/StructureDefinition/PatientAge"));
+        patient.addExtension(createIntegerExtension(age, "https://ecdc.amr/fhir/StructureDefinition/PatientAge"));
     }
 
     /**
@@ -80,7 +80,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param laboratoryCode The laboratory code value to be added to the extension.
      */
     private static void addLaboratoryCodeExtension(Patient patient, String laboratoryCode) {
-        patient.addExtension(createStringExtension(laboratoryCode, "https://ecdc.amt/fhir/StructureDefinition/PatientLaboratoryCode"));
+        patient.addExtension(createStringExtension(laboratoryCode, "https://ecdc.amr/fhir/StructureDefinition/PatientLaboratoryCode"));
     }
 
     /**
@@ -90,7 +90,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param hospitalId The hospital ID value to be added to the extension.
      */
     private static void addHospitalIdExtension(Patient patient, String hospitalId) {
-        patient.addExtension(createStringExtension(hospitalId, "https://ecdc.amt/fhir/StructureDefinition/PatientHospitalId"));
+        patient.addExtension(createStringExtension(hospitalId, "https://ecdc.amr/fhir/StructureDefinition/PatientHospitalId"));
     }
 
     /**
@@ -100,6 +100,6 @@ public class PatientBuilder extends ResourceBuilder {
      * @param hospitalUnitType The hospital unit type value to be added to the extension.
      */
     private static void addHospitalUnitTypeExtension(Patient patient, String hospitalUnitType) {
-        patient.addExtension(createStringExtension(hospitalUnitType, "https://ecdc.amt/fhir/StructureDefinition/PatientHospitalUnitType"));
+        patient.addExtension(createStringExtension(hospitalUnitType, "https://ecdc.amr/fhir/StructureDefinition/PatientHospitalUnitType"));
     }
 }

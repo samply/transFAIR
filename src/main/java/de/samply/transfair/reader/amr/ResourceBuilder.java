@@ -1,4 +1,4 @@
-package de.samply.transfair.reader.amt;
+package de.samply.transfair.reader.amr;
 
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IntegerType;

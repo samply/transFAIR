@@ -13,7 +13,7 @@ import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirPatientReader;
 import de.samply.transfair.reader.FhirSpecimenReader;
-import de.samply.transfair.reader.FhirAmtReader;
+import de.samply.transfair.reader.FhirAmrReader;
 import de.samply.transfair.writer.BeaconIndividualWriter;
 import de.samply.transfair.writer.BeaconBiosampleWriter;
 import org.hl7.fhir.r4.model.Bundle;
@@ -133,8 +133,8 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("amt2fhir")
-  public FhirResourceMapper amtToFhirMapper() {
+  @Profile("amr2fhir")
+  public FhirResourceMapper amrToFhirMapper() {
     return new FhirCopyResourceMapper();
   }
 
@@ -169,8 +169,8 @@ public class BatchConfiguration {
   }
 
   @Bean
-  public ItemReader<Bundle> amtReader() {
-    return new FhirAmtReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+  public ItemReader<Bundle> amrReader() {
+    return new FhirAmrReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
 
 
@@ -410,13 +410,13 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("amt2fhir")
-  public Step stepAmtToFhir(JobRepository jobRepository,
+  @Profile("amr2fhir")
+  public Step stepAmrToFhir(JobRepository jobRepository,
                                           PlatformTransactionManager transactionManager,
                                           FhirBundleProcessor processor) {
-    return new StepBuilder("stepAmtToFhir", jobRepository)
+    return new StepBuilder("stepAmrToFhir", jobRepository)
             .<Bundle, Bundle> chunk(10, transactionManager)
-            .reader(amtReader())
+            .reader(amrReader())
             .processor(processor)
             .writer(writer())
             .build();
@@ -479,11 +479,11 @@ public class BatchConfiguration {
   }
 
   @Bean
-  @Profile("amt2fhir")
-  public Job amtToFhirJob(JobRepository jobRepository, Step stepAmtToFhir) {
-    return new JobBuilder("amtToFhirJob", jobRepository)
+  @Profile("amr2fhir")
+  public Job amrToFhirJob(JobRepository jobRepository, Step stepAmrToFhir) {
+    return new JobBuilder("amrToFhirJob", jobRepository)
             .incrementer(new RunIdIncrementer())
-            .start(stepAmtToFhir)
+            .start(stepAmrToFhir)
             .build();
   }
 

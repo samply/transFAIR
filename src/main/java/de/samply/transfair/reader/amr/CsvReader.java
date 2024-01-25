@@ -1,4 +1,4 @@
-package de.samply.transfair.reader.amt;
+package de.samply.transfair.reader.amr;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;

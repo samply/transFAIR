@@ -12,8 +12,8 @@ imgmeta:
   fromFhir: ${IMGMETA_FROM_FHIR:true}
   dicomWebUrl: ${IMGMETA_DICOM_WEB_URL:}
   dicomFilePath: ${IMGMETA_DICOM_FILE_PATH:}
-amt:
-  filePath: ${AMT_FILE_PATH:}
+amr:
+  filePath: ${AMR_FILE_PATH:}
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}
