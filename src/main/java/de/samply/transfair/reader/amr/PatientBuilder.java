@@ -59,7 +59,7 @@ public class PatientBuilder extends ResourceBuilder {
             case "O":
                 return AdministrativeGender.OTHER;
             default:
-                return null; // Handle unknown values
+                return AdministrativeGender.UNKNOWN; // Handle unknown values
         }
     }
 
