@@ -34,6 +34,7 @@ public class ObservationBuilder extends ResourceBuilder {
         String dataSource = record.get("DataSource");
         String patientType = record.get("PatientType");
         String reportingCountry = record.get("ReportingCountry");
+        String referenceGuidelinesSir = record.get("ReferenceGuidelinesSIR");
 
         // Set properties of the Observation
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
@@ -45,6 +46,7 @@ public class ObservationBuilder extends ResourceBuilder {
         addDataSourceExtension(observation, dataSource);
         addPatientTypeExtension(observation, patientType);
         addReportingCountryExtension(observation, reportingCountry);
+        addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
 
         return observation;
     }
@@ -87,6 +89,16 @@ public class ObservationBuilder extends ResourceBuilder {
      */
     private static void addReportingCountryExtension(Observation observation, String reportingCountry) {
         observation.addExtension(createStringExtension(reportingCountry, "https://ecdc.amr/fhir/StructureDefinition/ObservationReportingCountry"));
+    }
+
+    /**
+     * Adds a reference guidelines extension to the given Observation resource.
+     *
+     * @param observation      The Observation resource to which the extension will be added.
+     * @param referenceGuidelinesSir The reference guidelines value to be added to the extension.
+     */
+    private static void addReferenceGuidelinesSirExtension(Observation observation, String referenceGuidelinesSir) {
+        observation.addExtension(createStringExtension(referenceGuidelinesSir, "https://ecdc.amr/fhir/StructureDefinition/ObservationReferenceGuidelinesSIR"));
     }
 
     /**
