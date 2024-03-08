@@ -10,7 +10,7 @@ import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.springframework.stereotype.Component;
 
-@Component
+//@Component
 public class FhirBundleBuilder {
 
     private final Bundle bundle;
