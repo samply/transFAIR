@@ -70,7 +70,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param age     The age value to be added to the extension.
      */
     private static void addAgeExtension(Patient patient, String age) {
-        patient.addExtension(createIntegerExtension(age, "https://ecdc.amr/fhir/StructureDefinition/PatientAge"));
+        patient.addExtension(createStringExtension(age, "https://ecdc.amr/fhir/StructureDefinition/PatientAge"));
     }
 
     /**

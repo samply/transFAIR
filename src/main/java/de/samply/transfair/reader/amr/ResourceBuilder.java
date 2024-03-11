@@ -13,11 +13,11 @@ public abstract class ResourceBuilder {
         return extension;
     }
 
-    protected static Extension createIntegerExtension(String value, String url) {
-        Extension extension = new Extension();
-        extension.setUrl(url);
-        extension.setValue(new IntegerType(Integer.parseInt(value)));
-
-        return extension;
-    }
+//    protected static Extension createIntegerExtension(String value, String url) {
+//        Extension extension = new Extension();
+//        extension.setUrl(url);
+//        extension.setValue(new IntegerType(Integer.parseInt(value)));
+//
+//        return extension;
+//    }
 }
