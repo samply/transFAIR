@@ -53,7 +53,7 @@ import de.samply.transfair.models.beacon.BeaconIndividuals;
 import de.samply.transfair.models.beacon.BeaconBiosamples;
 import lombok.extern.slf4j.Slf4j;
 
-@Configuration
+@Configuration("ehds2AppConfig")
 @Slf4j
 public class BatchConfiguration {
 
