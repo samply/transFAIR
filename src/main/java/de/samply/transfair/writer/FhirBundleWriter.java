@@ -66,10 +66,6 @@ public class FhirBundleWriter implements ItemWriter<Bundle> {
 
     var response = retryTemplate.execute((RetryCallback<Bundle, Exception>) context ->
     client.transaction().withBundle(bundle).execute());
-
-    String responseString = ctx.newJsonParser().encodeResourceToString(response);
-    log.info(responseString);
-
   }
 
   private void writeToFile(Bundle fhirBundle, int chunk) {
