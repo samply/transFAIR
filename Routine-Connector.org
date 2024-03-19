@@ -1,0 +1,540 @@
+#+title: Routine Connector
+#+TAGS: documentation
+Das Ziel des Routine Connector ist es, die Daten aus Forschungsprojekten mit Daten aus der Routineversorgung zu verknüpfen. Dabei wird soweit es geht auf Schnittstellen des FHIR Standards zurückgegriffen und innerhalb der [[https://www.medizininformatik-initiative.de/][Medizininformatik-Initiative]] (MII) etablierte Komponenten verwendet.
+
+* Konzept
+Zu Grunde gelegt wird, das an den Standorten bereits folgende Infrastruktur vorhanden ist:
+- Eine TTP, die das Hinzufügen und Auslesen von Consents über den FHIR Standard erlaubt
+- Ein Datenintegrationszentrum in dem bereits die Daten aus der Routineversorgung im [[https://www.medizininformatik-initiative.de/de/der-kerndatensatz-der-medizininformatik-initiative][MII-Kerndatensatz]] (MII-KDS) vorliegen
+Zusätzlich müssen Forschungsprojekte eine Einwilligung der Probanden einholen um die Daten der Routineversorgung nachladen zu dürfen.
+
+* Datenfluss im Detail
+#+VAR: SITE_TTP_FHIR_SERVER=http://localhost:8081/fhir
+#+VAR: INBOX_FHIR_SERVER=http://localhost:8082/fhir
+#+VAR: OUTBOX_FHIR_SERVER=http://localhost:8083/fhir
+VAR: ROUTINE_FHIR_SERVER=http://localhost:8084/fhir
+VAR: PROJECT_FHIR_SERVER=http://localhost:8085/fhir
+Im Folgenden werden die 3 Phasen der Datenübertragung im Detail beschrieben.
+** 1) Anfrage von Daten
+Im ersten Schritt meldet der Routine Connector der Standort-TTP den Consent des Patienten und erhält dafür ein Projektbezogenes Pseudonym. Daraufhin holt sich der Routine Connector von der Standort-TTP den gespeicherten Consent und ersetzt den darin zurückgemeldeten Patientenidentifier durch das von der Standort-TTP erhaltene Pseudonym
+*** 1.1) Erzeugung Projektpseudonym
+Der Routine Connector führt zu Beginn einen POST request
+#+begin_src restclient :var add-patient-request-json
+POST SITE_TTP_FHIR_SERVER/Patient
+Content-Type: application/fhir+json
+
+add-patient-request-json
+#+end_src
+mit folgendem JSON aus:
+#+begin_src json :name add-patient-request-json
+{
+    "id": "1",
+    "resourceType": "Patient",
+    "name": [
+        {
+            "family": "Timberlake",
+            "given": [ "Justin" ],
+            "prefix": ["Mr."]
+        }
+    ],
+    "birthdate": "1981-01-31",
+    "identifier": [
+        {
+            "use": "secondary",
+            "system": "PROJECT_XY_ID"
+        },
+        {
+            "use": "temp",
+            "system": "SESSION_ID"
+        }
+    ]
+}
+#+end_src
+*** 1.2) Dokumentation des Consents in Standort-TTP
+Nach dem Erhalt der vollständigen Patient Resource, übermittelt der Routine Connector den Consent des Patienten an die Standort-TTP
+#+begin_src restclient :var add-patient-consent-request-json
+POST SITE_TTP_FHIR_SERVER/Consent
+Content-Type: application/fhir+json
+
+add-patient-consent-request-json
+#+end_src
+ebenfalls in Form eines JSON:
+#+begin_src json :name add-patient-consent-request-json
+{
+    "id": "1",
+    "resourceType": "Consent",
+    "status": "active",
+    "scope": {
+        "coding": [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+                "code": "research"
+            }
+        ]
+    },
+    "category": [
+        {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "57016-8"
+                }
+            ]
+        }
+    ],
+    "patient": {
+        "identifier": {
+            "system": "SESSION_ID",
+            "value": "<project-identifier-from-previous-response>"
+        }
+    },
+    "dateTime": "<date-time-of-the-consent>",
+    "organization": [
+        {
+            "display": "<name-of-university-which-got-the-consent>"
+        }
+    ],
+    "policy": [
+        {
+            "uri": "/Questionnaire/Mii-Broad-Consent"
+        }
+    ],
+    "policyRule": {
+        "extension": [
+            {
+                "url": "http://fhir.de/ConsentManagement/StructureDefinition/Xacml",
+                "valueBase64Binary": "TUlJIEJDIEV4YW1wbGUgWEFDTUw="
+            }
+        ],
+        "text": "siehe eingebettetes XACML"
+    },
+    "provision": {
+        "type": "permit",
+        "period": {
+            "start": "2020-09-01",
+            "end": "2050-08-31"
+        },
+        "provision": [
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2025-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.6",
+                                "display": "MDAT_erheben"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.7",
+                                "display": "MDAT_speichern_verarbeiten"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.8",
+                                "display": "MDAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2025-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.19",
+                                "display": "BIOMAT_erheben"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.20",
+                                "display": "BIOMAT_lagern_verarbeiten"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                        "end": "2050-08-31"
+                    },
+                    "code": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                    "code": "2.16.840.1.113883.3.1937.777.24.5.3.22",
+                                    "display": "BIOMAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+}
+#+end_src
+
+Der zurückgegebene Consent enthält als Identifier des dazugehörigen Patient nur die SESSION_ID, wodurch die Transferstelle später nicht die Projekt ID ermitteln kann.
+*** 1.3) Meldung des Consent an die Inbox
+Hierfür wird die gleiche Request wie auch in 1.2 an den INBOX FHIR Server durchgeführt.
+#+begin_src restclient
+POST INBOX_FHIR_SERVER/Consent
+Content-Type: application/fhir+json
+
+add-patient-consent-request-json-2
+#+end_src
+#+begin_src json :name add-patient-consent-request-json-2
+{
+    "id": "1",
+    "resourceType": "Consent",
+    "status": "active",
+    "scope": {
+        "coding": [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+                "code": "research"
+            }
+        ]
+    },
+    "category": [
+        {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "57016-8"
+                }
+            ]
+        }
+    ],
+    "patient": {
+        "identifier": {
+            "system": "SESSION_ID",
+            "value": "<project-identifier-from-previous-response>"
+        }
+    },
+    "dateTime": "<date-time-of-the-consent>",
+    "organization": [
+        {
+            "display": "<name-of-university-which-got-the-consent>"
+        }
+    ],
+    "policy": [
+        {
+            "uri": "/Questionnaire/Mii-Broad-Consent"
+        }
+    ],
+    "policyRule": {
+        "extension": [
+            {
+                "url": "http://fhir.de/ConsentManagement/StructureDefinition/Xacml",
+                "valueBase64Binary": "TUlJIEJDIEV4YW1wbGUgWEFDTUw="
+            }
+        ],
+        "text": "siehe eingebettetes XACML"
+    },
+    "provision": {
+        "type": "permit",
+        "period": {
+            "start": "2020-09-01",
+            "end": "2050-08-31"
+        },
+        "provision": [
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2025-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.6",
+                                "display": "MDAT_erheben"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.7",
+                                "display": "MDAT_speichern_verarbeiten"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.8",
+                                "display": "MDAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2025-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.19",
+                                "display": "BIOMAT_erheben"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                    "end": "2050-08-31"
+                },
+                "code": [
+                    {
+                        "coding": [
+                            {
+                                "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                "code": "2.16.840.1.113883.3.1937.777.24.5.3.20",
+                                "display": "BIOMAT_lagern_verarbeiten"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "permit",
+                "period": {
+                    "start": "2020-09-01",
+                        "end": "2050-08-31"
+                    },
+                    "code": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                                    "code": "2.16.840.1.113883.3.1937.777.24.5.3.22",
+                                    "display": "BIOMAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+}
+#+end_src
+** 2) Bereitstellung von Daten
+In diesem Schritt werden von der Datentransferstelle die angeforderten Daten bereitgestellt. Dazu werden die Patientenconsents aus der Inbox geholt und bei der Standort-TTP der zugehörige Identifier in den Routine Systemen ermittelt.
+Mit diesem kann die Transferstelle die Daten der Routine mit dem in der Inbox angegeben Consent in der Outbox hinterlegen. Eine Referenzimplementierung dieser Funktionalität ist zu finden unter @@todo: Add Link Here@@
+*** 2.1) Abfrage von Consents der Inbox
+#+begin_src restclient
+GET INBOX_FHIR_SERVER/Consent/_search?lastUpdated=gt(last-request-date)
+#+end_src
+*** 2.2) Ermittlung zugehöriger DIZ Pseudonyme
+Diese Anfrage wird vermutlich nicht einheitlich über alle Standorte gelöst werden können. Wenn es möglich ist, könnte die Transferstelle so etwas probieren:
+#+begin_src restclient
+PATCH SITE_TTP_FHIR_SERVER/Patient
+Content-Type: application/fhir+json
+
+exchange-pseudonym-request
+#+end_src
+#+begin_src json :name exchange-pseudonym-request
+{
+    resourceType: "Patient"
+    identifier: [
+        {
+            "system": "SESSION_ID",
+            "value": "<the-known-session-id>"
+        },
+        {
+            "system": "PROJECT_XY_ID",
+        }
+    ]
+}
+#+end_src
+Maybe the FHIR Server will not create a new session id and actually find the resource based on that, but that needs further checking.
+*** 2.3) Sammeln der Routine Daten zu dem Patienten
+#+begin_src restclient
+GET ROUTINE_FHIR_SERVER?patient.id=<id-from-the-retourned-patient-resource>
+#+end_src
+*** 2.4) Ablegen der Daten in der Outbox
+Das hochladen der Daten wird in Form eines Bundles gemacht, da wir hier vermutlich viele Resourcen auf einmal hochladen müssen
+#+begin_src restclient
+POST OUTBOX_FHIR_SERVER
+Content-Type: application/fhir+json
+
+routine-data-bundle
+#+end_src
+Das Bundle ist dabei folgendermaßen aufgebaut
+#+begin_src json :name routine-data-bundle
+{
+    "resourceType": "Bundle",
+    "type": "transaction",
+	"entry": [
+        {
+	        "resource": "<consent-resource>",
+            "request": {
+                "method": "POST",
+                "url": "Consent"
+	        }
+        },
+        {
+	        "resource": "<data-resource-1>",
+            "request": {
+                "method": "POST",
+                "url": "ProfileDataResource1"
+	        }
+        },
+        ...
+        {
+	        "resource": "<data-resource-n>",
+            "request": {
+                "method": "POST",
+                "url": "ProfileDataResourceN"
+	        }
+        }
+    ]
+}
+#+end_src
+** 3) Abholen der Daten
+In diesem Schritt werden die Daten vom Routine Connector aus der Outbox abgeholt und in der entsprechenden Projekt Datenbank abgelegt.
+*** 3.1) Polling von Daten aus der Outbox
+Alternative Implementierung könnte mit FHIR Subscriptions umgesetzt werden, aktuell sind diese aber in der Trial Phase, wodurch nicht klar ist welche Server das Feature bereits unterstützten.
+Daher wird hier eine Methode basierend auf FHIR Bundles genutzt: https://build.fhir.org/ig/HL7/davinci-ehrx/exchanging-polling.html
+#+begin_src restclient
+GET OUTBOX_FHIR_SERVER/_search?lastUpdated=gt<last-request-date>
+Content-Type: application/fhir+json
+#+end_src
+*** 3.2) Ergänzen des Projektidentifier
+In den erhaltenen Resourcen kann jetzt im Consent wieder die SESSION_ID durch die PROJECT_XY_ID ersetzt werden.
+*** 3.3) Laden der Routine Daten in Projektdatenbank
+Das Laden der Routine Daten in die Projektdatenbank funktioniert analog zu dem Laden in 2.4. Hierbei ist zu beachten, dass nur die aktuellsten Resourcen an die Projektdatenbank übermittelt werden sollen, da die Anfrage in 3.1 auch mehrmals die gleiche Resource zurückgegeben kann, eben in unterschiedlichen Versionen.
+Der Routine Connector baut deshalb vor dem Hochladen der Daten ein FHIR Bundle mit allen relevanten Resourcen zusammen
+#+begin_src json :name routine-data-bundle
+{
+    "resourceType": "Bundle",
+    "type": "transaction",
+	"entry": [
+        {
+	        "resource": "<consent-resource>",
+            "request": {
+                "method": "POST",
+                "url": "Consent"
+	        }
+        },
+        {
+	        "resource": "<data-resource-1>",
+            "request": {
+                "method": "POST",
+                "url": "ProfileDataResource1"
+	        }
+        },
+        ...
+        {
+	        "resource": "<data-resource-n>",
+            "request": {
+                "method": "POST",
+                "url": "ProfileDataResourceN"
+	        }
+        }
+    ]
+}
+#+end_src
+und übermittelt dieses an die Adresse
+#+begin_src restclient
+POST PROJECT_FHIR_SERVER
+Content-Type: application/fhir+json
+
+routine-data-bundle
+#+end_src
+* Aktuelle Fragen
+1) Soll die Inbox persistent sein, d.h. eingefügte Consents werden dauerhaft gespeichert und nicht nach der Übertragung gelöscht?
+   Pro: Daten in der Outbox bleiben aktuell --> vor allem bei Einwilligungen für die Nächsten X Jahre sinnvoll
+   Contra: Der Identifier Session kann keine Temporär erzeugte ID sein, da diese dann ja ihre Gültigkeit davor verlieren würde
+2) Wo wird der Kommunikationsidentifier erzeugt?
+   Im Routine Connector --> funktioniert nicht, da die Standort TTP das ja nicht verknüpfen kann
+   In der TTP --> kann die TTP das überhaupt auflösen?
+3) Soll der Routine Connector mehrere Projektdatenbanken unterstützen?
+   Dann wäre eine Konfiguration von Projektidentifier und zugehörigen Projektdatenbanken notwendig.
