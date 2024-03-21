@@ -1,6 +1,11 @@
+# ide files
 .DS_Store
 .idea
 *.log
 tmp/
 
+# local configuration
 docker-compose.override.yml
+
+# build outputs
+/target
