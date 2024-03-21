@@ -1,3 +1,5 @@
+mod banner;
+
 fn main() {
-    println!("Hello, world!");
+    banner::print_banner();
 }
