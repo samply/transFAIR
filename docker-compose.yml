@@ -1,0 +1,56 @@
+# This file contains a test setup for the routine data connector
+version: "3.8"
+configs:
+  mainzelliste.docker.conf:
+    file: ./configs/mainzelliste/mainzelliste.conf
+services:
+
+  # The first ttp we want to support, therefore our default
+  mainzelliste:
+    image: medicalinformatics/mainzelliste:1.12-latest
+    ports:
+      - 8081:8080
+    environment:
+      # Define these in the docker compose override
+      MANDATORY_VARIABLES: "ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE"
+      ML_DB_NAME: mainzelliste
+      ML_DB_USER: mainzelliste
+      ML_DB_HOST: mainzelliste-db
+    configs:
+      - mainzelliste.docker.conf
+    depends_on:
+      - mainzelliste-db
+
+  mainzelliste-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mainzelliste
+      POSTGRES_USER: mainzelliste
+      POSTGRES_PASSWORD: change-this-for-production
+
+  # TODO: Alternative deployment version for Greifswald THS
+  # will include a full set of epix, gics, gpas
+
+  # This service will normaly be provided by the bridgehead, but could also be just a fhir server hosted by the authority for data transfer
+  consent-fhir-server:
+    image: samply/blaze
+    ports:
+      - 8085:8080
+
+  # This service will normaly be provided by the bridgehead, but could also be just a fhir server hosted by the authority for data transfer
+  mdat-fhir-server:
+    image: samply/blaze
+    ports:
+      - 8086:8080
+
+  # This is the place where the authority for data transfer gathers their data
+  routine-data-fhir-server:
+    image: samply/blaze
+    ports:
+      - 8090:8080
+
+  # This service reprents a specific projects database
+  project-data-fhir-server:
+    image: samply/blaze
+    ports:
+      - 8095:8080

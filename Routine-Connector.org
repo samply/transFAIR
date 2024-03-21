@@ -9,24 +9,90 @@ Zu Grunde gelegt wird, das an den Standorten bereits folgende Infrastruktur vorh
 Zusätzlich müssen Forschungsprojekte eine Einwilligung der Probanden einholen um die Daten der Routineversorgung nachladen zu dürfen.
 
 * Datenfluss im Detail
-#+VAR: SITE_TTP_FHIR_SERVER=http://localhost:8081/fhir
-#+VAR: INBOX_FHIR_SERVER=http://localhost:8082/fhir
-#+VAR: OUTBOX_FHIR_SERVER=http://localhost:8083/fhir
-VAR: ROUTINE_FHIR_SERVER=http://localhost:8084/fhir
-VAR: PROJECT_FHIR_SERVER=http://localhost:8085/fhir
+#+PROPERTY: header-args :var
+#+PROPERTY: header-args+ MAINZELLISTE_INTERFACE="http://localhost:8081/fhir"
+#+PROPERTY: header-args+ ROUTINE_CONNECTOR_API_KEY="routine-connector-password"
+#+PROPERTY: header-args+ DIZ_API_KEY="diz-password"
+#+PROPERTY: header-args+ CONSENT_FHIR_INTERFACE="http://localhost:8085/fhir"
+#+PROPERTY: header-args+ MDAT_FHIR_INTERFACE="http://localhost:8086/fhir"
+#+PROPERTY: header-args+ ROUTINE_FHIR_INTERFACE="http://localhost:8090/fhir"
+#+PROPERTY: header-args+ PROJECT_FHIR_INTERFACE="http://localhost:8095/fhir"
 Im Folgenden werden die 3 Phasen der Datenübertragung im Detail beschrieben.
 ** 1) Anfrage von Daten
 Im ersten Schritt meldet der Routine Connector der Standort-TTP den Consent des Patienten und erhält dafür ein Projektbezogenes Pseudonym. Daraufhin holt sich der Routine Connector von der Standort-TTP den gespeicherten Consent und ersetzt den darin zurückgemeldeten Patientenidentifier durch das von der Standort-TTP erhaltene Pseudonym
-*** 1.1) Erzeugung Projektpseudonym
+*** 1.1) Erzeugung Projektpseudonym (Mainzelliste)
 Der Routine Connector führt zu Beginn einen POST request
-#+begin_src restclient :var add-patient-request-json
-POST SITE_TTP_FHIR_SERVER/Patient
+#+NAME: patient-fhir-data
+#+begin_src restclient :results value
+POST :MAINZELLISTE_INTERFACE/Patient
+Content-Type: application/fhir+json
+mainzellisteApiKey: :ROUTINE_CONNECTOR_API_KEY
+
+{
+    "id": "1",
+    "resourceType": "Patient",
+    "name": [
+        {
+            "family": "Timberlake",
+            "given": [ "Justin" ],
+            "prefix": ["Mr."],
+            "use": "official"
+        }
+    ],
+    "birthDate": "1981-01-31",
+    "identifier": [
+        {
+            "use": "secondary",
+            "system": "PROJECT_XY_ID",
+            "value": "1"
+        },
+        {
+            "use": "temp",
+            "system": "SESSION_ID",
+            "value": "1"
+        }
+    ]
+}
+#+end_src
+
+#+RESULTS: patient-fhir-data
+{
+  "resourceType": "Patient",
+  "id": "0003Y0WZ",
+  "identifier": [
+    {
+      "use": "secondary",
+      "system": "INTERNAL_ID",
+      "value": "0003Y0WZ"
+    },
+    {
+      "use": "secondary",
+      "system": "SESSION_ID",
+      "value": "1"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "Timberlake",
+      "given": [
+        "Justin"
+      ]
+    },
+    {
+      "use": "maiden",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "birthDate": "1981-01-31"
+}
+*** 1.1) Erzeugung Projektpseudonym (gPAS)
+#+begin_src restclient
+POST :MAINZELLISTE_INTERFACE/Patient
 Content-Type: application/fhir+json
 
-add-patient-request-json
-#+end_src
-mit folgendem JSON aus:
-#+begin_src json :name add-patient-request-json
 {
     "id": "1",
     "resourceType": "Patient",
@@ -41,25 +107,42 @@ mit folgendem JSON aus:
     "identifier": [
         {
             "use": "secondary",
-            "system": "PROJECT_XY_ID"
+            "system": "PROJECT_XY_ID",
+            "value": "1"
         },
         {
             "use": "temp",
-            "system": "SESSION_ID"
+            "system": "SESSION_ID",
+            "value": "1"
         }
     ]
 }
 #+end_src
 *** 1.2) Dokumentation des Consents in Standort-TTP
-Nach dem Erhalt der vollständigen Patient Resource, übermittelt der Routine Connector den Consent des Patienten an die Standort-TTP
-#+begin_src restclient :var add-patient-consent-request-json
-POST SITE_TTP_FHIR_SERVER/Consent
+Nach dem Erhalt der vollständigen Patient Resource, übermittelt der Routine Connector den Consent des Patienten an die Standort-TTP unter zu Hilfe Name der erhaltenen SESSION_ID
+#+NAME: session-id-from-fhir
+#+begin_src sh :var data=patient-fhir-data
+echo "$data" | jq -c '[.identifier[] | select(.system | contains("SESSION_ID")) | .value][0]'
+#+end_src
+
+#+RESULTS: session-id-from-fhir
+: 1
+
+Ebenfalls wird das aktuelle Datum an den Consent gepackt
+#+NAME: current-date
+#+begin_src sh
+echo $(date '+%Y-%m-%d')
+#+end_src
+
+#+RESULTS: current-date
+: 2024-03-21
+
+
+Die abschließende Anfrage sieht folgendermaßen aus
+#+begin_src restclient :var current-date=current-date
+POST :MAINZELLISTE_INTERFACE/Consent
 Content-Type: application/fhir+json
 
-add-patient-consent-request-json
-#+end_src
-ebenfalls in Form eines JSON:
-#+begin_src json :name add-patient-consent-request-json
 {
     "id": "1",
     "resourceType": "Consent",
@@ -85,13 +168,13 @@ ebenfalls in Form eines JSON:
     "patient": {
         "identifier": {
             "system": "SESSION_ID",
-            "value": "<project-identifier-from-previous-response>"
+            "value": ":session-id-from-fhir"
         }
     },
-    "dateTime": "<date-time-of-the-consent>",
+    "dateTime": ":current-date",
     "organization": [
         {
-            "display": "<name-of-university-which-got-the-consent>"
+            "display": "Some University Clinic"
         }
     ],
     "policy": [
@@ -228,16 +311,28 @@ ebenfalls in Form eines JSON:
 }
 #+end_src
 
+#+RESULTS:
+#+BEGIN_SRC html
+<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not Found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/10.1.15</h3></body></html>
+<!-- POST http://localhost:8081/fhir/Consent -->
+<!-- HTTP/1.1 404  -->
+<!-- Server: Mainzelliste/1.12.0 -->
+<!-- Content-Type: text/html;charset=utf-8 -->
+<!-- Content-Language: en -->
+<!-- Content-Length: 714 -->
+<!-- Date: Thu, 21 Mar 2024 13:51:34 GMT -->
+<!-- Keep-Alive: timeout=20 -->
+<!-- Connection: keep-alive -->
+<!-- Request duration: 0.008063s -->
+#+END_SRC
+
 Der zurückgegebene Consent enthält als Identifier des dazugehörigen Patient nur die SESSION_ID, wodurch die Transferstelle später nicht die Projekt ID ermitteln kann.
 *** 1.3) Meldung des Consent an die Inbox
-Hierfür wird die gleiche Request wie auch in 1.2 an den INBOX FHIR Server durchgeführt.
+Hierfür wird die gleiche Request wie auch in 1.2 an den CONSENT FHIR Server durchgeführt.
 #+begin_src restclient
-POST INBOX_FHIR_SERVER/Consent
+POST :CONSENT_FHIR_INTERFACE/Consent
 Content-Type: application/fhir+json
 
-add-patient-consent-request-json-2
-#+end_src
-#+begin_src json :name add-patient-consent-request-json-2
 {
     "id": "1",
     "resourceType": "Consent",
@@ -410,17 +505,14 @@ In diesem Schritt werden von der Datentransferstelle die angeforderten Daten ber
 Mit diesem kann die Transferstelle die Daten der Routine mit dem in der Inbox angegeben Consent in der Outbox hinterlegen. Eine Referenzimplementierung dieser Funktionalität ist zu finden unter @@todo: Add Link Here@@
 *** 2.1) Abfrage von Consents der Inbox
 #+begin_src restclient
-GET INBOX_FHIR_SERVER/Consent/_search?lastUpdated=gt(last-request-date)
+GET :CONSENT_FHIR_INTERFACE/Consent/_search?lastUpdated=gt(last-request-date)
 #+end_src
 *** 2.2) Ermittlung zugehöriger DIZ Pseudonyme
 Diese Anfrage wird vermutlich nicht einheitlich über alle Standorte gelöst werden können. Wenn es möglich ist, könnte die Transferstelle so etwas probieren:
 #+begin_src restclient
-PATCH SITE_TTP_FHIR_SERVER/Patient
+PATCH :MAINZELLISTE_INTERFACE/Patient
 Content-Type: application/fhir+json
 
-exchange-pseudonym-request
-#+end_src
-#+begin_src json :name exchange-pseudonym-request
 {
     resourceType: "Patient"
     identifier: [
@@ -437,18 +529,14 @@ exchange-pseudonym-request
 Maybe the FHIR Server will not create a new session id and actually find the resource based on that, but that needs further checking.
 *** 2.3) Sammeln der Routine Daten zu dem Patienten
 #+begin_src restclient
-GET ROUTINE_FHIR_SERVER?patient.id=<id-from-the-retourned-patient-resource>
+GET :ROUTINE_FHIR_INTERFACE?patient.id=<id-from-the-retourned-patient-resource>
 #+end_src
 *** 2.4) Ablegen der Daten in der Outbox
 Das hochladen der Daten wird in Form eines Bundles gemacht, da wir hier vermutlich viele Resourcen auf einmal hochladen müssen
 #+begin_src restclient
-POST OUTBOX_FHIR_SERVER
+POST :MDAT_FHIR_INTERFACE
 Content-Type: application/fhir+json
 
-routine-data-bundle
-#+end_src
-Das Bundle ist dabei folgendermaßen aufgebaut
-#+begin_src json :name routine-data-bundle
 {
     "resourceType": "Bundle",
     "type": "transaction",
@@ -484,15 +572,18 @@ In diesem Schritt werden die Daten vom Routine Connector aus der Outbox abgeholt
 Alternative Implementierung könnte mit FHIR Subscriptions umgesetzt werden, aktuell sind diese aber in der Trial Phase, wodurch nicht klar ist welche Server das Feature bereits unterstützten.
 Daher wird hier eine Methode basierend auf FHIR Bundles genutzt: https://build.fhir.org/ig/HL7/davinci-ehrx/exchanging-polling.html
 #+begin_src restclient
-GET OUTBOX_FHIR_SERVER/_search?lastUpdated=gt<last-request-date>
+GET :MDAT_FHIR_INTERFACE/_search?lastUpdated=gt<last-request-date>
 Content-Type: application/fhir+json
 #+end_src
 *** 3.2) Ergänzen des Projektidentifier
 In den erhaltenen Resourcen kann jetzt im Consent wieder die SESSION_ID durch die PROJECT_XY_ID ersetzt werden.
 *** 3.3) Laden der Routine Daten in Projektdatenbank
 Das Laden der Routine Daten in die Projektdatenbank funktioniert analog zu dem Laden in 2.4. Hierbei ist zu beachten, dass nur die aktuellsten Resourcen an die Projektdatenbank übermittelt werden sollen, da die Anfrage in 3.1 auch mehrmals die gleiche Resource zurückgegeben kann, eben in unterschiedlichen Versionen.
-Der Routine Connector baut deshalb vor dem Hochladen der Daten ein FHIR Bundle mit allen relevanten Resourcen zusammen
-#+begin_src json :name routine-data-bundle
+Der Routine Connector baut deshalb vor dem Hochladen der Daten ein FHIR Bundle mit allen relevanten Resourcen zusammen und übermittelt dieses an die Adresse
+#+begin_src restclient
+POST :PROJECT_FHIR_INTERFACE
+Content-Type: application/fhir+json
+
 {
     "resourceType": "Bundle",
     "type": "transaction",
@@ -521,13 +612,6 @@ Der Routine Connector baut deshalb vor dem Hochladen der Daten ein FHIR Bundle m
         }
     ]
 }
-#+end_src
-und übermittelt dieses an die Adresse
-#+begin_src restclient
-POST PROJECT_FHIR_SERVER
-Content-Type: application/fhir+json
-
-routine-data-bundle
 #+end_src
 * Aktuelle Fragen
 1) Soll die Inbox persistent sein, d.h. eingefügte Consents werden dauerhaft gespeichert und nicht nach der Übertragung gelöscht?
