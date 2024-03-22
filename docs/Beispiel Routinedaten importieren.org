@@ -1,0 +1,513 @@
+#+title: Beispiel Routinedaten importieren
+#+PROPERTY: header-args :var
+#+PROPERTY: header-args+ ROUTINE_FHIR_INTERFACE="http://localhost:8090/fhir"
+#+PROPERTY: header-args+ MAINZELLISTE_INTERFACE="http://localhost:8081/fhir"
+#+PROPERTY: header-args+ DIZ_API_KEY="diz-password"
+Im Folgenden wird beschrieben, wie der Routine Datensatz vorzubereiten ist.
+* Beispiel Forschungsprojekt
+Laut dem MII-KDS soll für Forschungsprojekte das Standard Profile "ResearchStudy" verwendet werden[fn:1]. Forschungsprojekte lassen sich dabei verschachteln, wodurch wir z. Bsp. ein Forschungsprojekt "CORTEX" definieren können, welches von einem im Rahmen von CORTEX laufenden Projekt "PROJECT_CORTEX_1" referenziert werden können.
+** Anlegen Forschungsprojekt "CORTEX"
+#+NAME: research-study-cortex
+#+begin_src restclient :results value
+POST :ROUTINE_FHIR_INTERFACE/ResearchStudy
+Content-Type: application/fhir+xml
+
+<ResearchStudy xmlns="http://hl7.org/fhir">
+    <id value="1" />
+    <extension url="http://fhir.de/ConsentManagement/StructureDefinition/VersionFormat">
+        <extension url="formatString">
+            <valueString value="major.minor.char" />
+        </extension>
+    </extension>
+    <extension url="http://fhir.de/ConsentManagement/StructureDefinition/ContextIdentifier">
+        <extension url="resourceType">
+            <valueCoding>
+                <system value="http://hl7.org/fhir/resource-types" />
+                <code value="Patient" />
+            </valueCoding>
+        </extension>
+    </extension>
+    <identifier>
+        <!-- NOTE: This is no globally justifyable Identifier, for nation-wide research project the system may need to point at a common url -->
+        <system value="CORTEX" />
+        <value value="CORTEX" />
+    </identifier>
+    <title value="CORTEX" />
+    <status value="active" />
+    <description value="Beispiel Dom&#228;ne f&#252;r CORTEX" />
+</ResearchStudy>
+#+end_src
+
+#+RESULTS: research-study-cortex
+{
+  "description": "Beispiel Domäne für CORTEX",
+  "meta": {
+    "versionId": "1",
+    "lastUpdated": "2024-03-22T13:20:45.585Z"
+  },
+  "resourceType": "ResearchStudy",
+  "title": "CORTEX",
+  "extension": [
+    {
+      "extension": [
+        {
+          "url": "formatString",
+          "valueString": "major.minor.char"
+        }
+      ],
+      "url": "http://fhir.de/ConsentManagement/StructureDefinition/VersionFormat"
+    },
+    {
+      "extension": [
+        {
+          "url": "resourceType",
+          "valueCoding": {
+            "system": "http://hl7.org/fhir/resource-types",
+            "code": "Patient"
+          }
+        }
+      ],
+      "url": "http://fhir.de/ConsentManagement/StructureDefinition/ContextIdentifier"
+    }
+  ],
+  "status": "active",
+  "id": "DDTGKIW6Q7YCCFGD",
+  "identifier": [
+    {
+      "system": "CORTEX",
+      "value": "CORTEX"
+    }
+  ]
+}
+
+** Anlegen Forschungsprojekt "PROJECT_CORTEX_1"
+Für die Referenz auf Cortex benötigen wir die ID the Projects Cortex, diese können wir nach dem Anlegen des Projekt ermitteln:
+#+NAME: cortex-study-id
+#+begin_src sh :var data=research-study-cortex
+echo "$data" | jq .id
+#+end_src
+
+#+RESULTS: cortex-study-id
+: DDTGKJBEPXYTHBQP
+
+Damit kann das Projekt dann angelegt werden:
+#+NAME: research-study-cortex-project-1
+#+begin_src restclient :var cortex-study-id=cortex-study-id :results value
+POST :ROUTINE_FHIR_INTERFACE/ResearchStudy
+Content-Type: application/fhir+xml
+
+<ResearchStudy xmlns="http://hl7.org/fhir">
+    <id value="2" />
+    <extension url="http://fhir.de/ConsentManagement/StructureDefinition/VersionFormat">
+        <extension url="formatString">
+            <valueString value="major.minor.char" />
+        </extension>
+    </extension>
+    <extension url="http://fhir.de/ConsentManagement/StructureDefinition/ContextIdentifier">
+        <extension url="resourceType">
+            <valueCoding>
+                <system value="http://hl7.org/fhir/resource-types" />
+                <code value="Patient" />
+            </valueCoding>
+        </extension>
+    </extension>
+    <identifier>
+        <!-- NOTE: This is no globally justifyable Identifier, for nation-wide research project the system may need to point at a common url -->
+        <system value="CORTEX_PROJECT_1" />
+        <value value="CORTEX_PROJECT_1" />
+    </identifier>
+    <partOf>
+      <reference value="/ResearchStudy/DDTGKJBEPXYTHBQP" />
+    </partOf>
+    <title value="CORTEX Project 1" />
+    <status value="active" />
+    <description value="Beispiel Projekt CORTEX_PROJECT_1 für Dom&#228;ne f&#252;r CORTEX" />
+</ResearchStudy>
+#+end_src
+
+#+RESULTS: research-study-cortex-project-1
+{
+  "description": "Beispiel Projekt CORTEX_PROJECT_1 für Domäne für CORTEX",
+  "meta": {
+    "versionId": "6",
+    "lastUpdated": "2024-03-22T13:22:03.908Z"
+  },
+  "resourceType": "ResearchStudy",
+  "title": "CORTEX Project 1",
+  "extension": [
+    {
+      "extension": [
+        {
+          "url": "formatString",
+          "valueString": "major.minor.char"
+        }
+      ],
+      "url": "http://fhir.de/ConsentManagement/StructureDefinition/VersionFormat"
+    },
+    {
+      "extension": [
+        {
+          "url": "resourceType",
+          "valueCoding": {
+            "system": "http://hl7.org/fhir/resource-types",
+            "code": "Patient"
+          }
+        }
+      ],
+      "url": "http://fhir.de/ConsentManagement/StructureDefinition/ContextIdentifier"
+    }
+  ],
+  "status": "active",
+  "id": "DDTGKNQAE3AKILJ6",
+  "identifier": [
+    {
+      "system": "CORTEX_PROJECT_1",
+      "value": "CORTEX_PROJECT_1"
+    }
+  ],
+  "partOf": [
+    {
+      "reference": "/ResearchStudy/DDTGKJBEPXYTHBQP"
+    }
+  ]
+}
+* Beispiel MII-Datensatz importieren
+Die folgenden Aufrufe simulieren die ein paar der Interaktionen der Transferstelle innerhalb ihres ETL Prozesses. Angenommen wird, dass zu erst aus der TTP eine ID für den Patienten geholt wird, welche dann als Referenz in allen anderen Resourcen verwendet wird.
+** Id für den Patienten aus der TTP holen
+#+begin_src restclient :results value
+POST :MAINZELLISTE_INTERFACE/Patient
+Content-Type: application/fhir+json
+mainzellisteApiKey: :DIZ_API_KEY
+
+{
+    "resourceType": "Patient",
+    "name": [
+        {
+            "family": "Timberlake",
+            "given": [ "Justin" ],
+            "prefix": ["Mr."],
+            "use": "official"
+        }
+    ],
+    "birthDate": "1981-01-31",
+    "identifier": [
+        {
+            "use": "secondary",
+            "system": "DIZ_ID"
+        }
+
+    ]
+}
+#+end_src
+
+#+RESULTS:
+{
+  "resourceType": "Patient",
+  "id": "0003Y0WZ",
+  "identifier": [
+    {
+      "use": "secondary",
+      "system": "DIZ_ID",
+      "value": "005TY0EC"
+    },
+    {
+      "use": "secondary",
+      "system": "INTERNAL_ID",
+      "value": "0003Y0WZ"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "Timberlake",
+      "given": [
+        "Justin"
+      ]
+    },
+    {
+      "use": "maiden",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "birthDate": "1981-01-31"
+}
+** Speichern der Patientendaten im Routine Daten Store
+#+begin_src restclient :results value
+POST :ROUTINE_FHIR_INTERFACE/Patient
+Content-Type: application/fhir+json
+
+{
+    "resourceType": "Patient",
+    "identifier":  [
+        {
+            "use": "secondary",
+            "system": "DIZ_ID",
+            "value": "005TY0EC"
+        }
+    ],
+    "name": [
+        {
+            "use": "official",
+            "family": "Timberlake",
+            "given": [
+              "Justin"
+            ]
+        }
+    ],
+    "address":  [
+        {
+            "type": "both",
+            "line":  [
+                "Teststraße 2"
+            ],
+            "city": "Köln",
+            "postalCode": "50823",
+            "country": "DE"
+        }
+    ],
+    "gender": "male",
+    "birthDate": "1981-01-31"
+}
+#+end_src
+
+#+RESULTS:
+{
+  "address": [
+    {
+      "type": "both",
+      "line": [
+        "Teststraße 2"
+      ],
+      "city": "Köln",
+      "postalCode": "50823",
+      "country": "DE"
+    }
+  ],
+  "meta": {
+    "versionId": "7",
+    "lastUpdated": "2024-03-22T13:36:10.055Z"
+  },
+  "name": [
+    {
+      "use": "official",
+      "family": "Timberlake",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "birthDate": "1981-01-31",
+  "resourceType": "Patient",
+  "id": "DDTGMBETDV2X4FK2",
+  "identifier": [
+    {
+      "use": "secondary",
+      "system": "DIZ_ID",
+      "value": "005TY0EC"
+    }
+  ],
+  "gender": "male"
+}
+** Anlegen einer Condition für den Patienten
+#+begin_src restclient
+POST :ROUTINE_FHIR_INTERFACE/Condition
+Content-Type: application/fhir+json
+
+{
+    "resourceType": "Condition",
+    "clinicalStatus": {
+        "coding":  [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                "code": "active"
+            }
+        ]
+    },
+    "code": {
+        "coding":  [
+            {
+                "system": "http://fhir.de/CodeSystem/dimdi/icd-10-gm",
+                "version": "2020",
+                "code": "S50.0",
+                "display": "Prellung des Ellenbogens"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "91613004",
+                "display": "Contusion of elbow (disorder)"
+            }
+        ],
+        "text": "Prellung des linken Ellenbogens"
+    },
+    "subject": {
+        "identifier": {
+            "system": "DIZ_ID",
+            "value": "005TY0EC"
+        }
+    },
+    "onsetPeriod": {
+        "start": "2020-02-26T12:00:00+01:00",
+        "end": "2020-03-05T13:00:00+01:00"
+    },
+    "recordedDate": "2020-02-26T12:00:00+01:00"
+}
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "clinicalStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active"
+      }
+    ]
+  },
+  "meta": {
+    "versionId": "8",
+    "lastUpdated": "2024-03-22T13:52:42.493Z"
+  },
+  "onsetPeriod": {
+    "start": "2020-02-26T12:00:00+01:00",
+    "end": "2020-03-05T13:00:00+01:00"
+  },
+  "resourceType": "Condition",
+  "recordedDate": "2020-02-26T12:00:00+01:00",
+  "id": "DDTGN5W6O3JG7DSN",
+  "code": {
+    "coding": [
+      {
+        "system": "http://fhir.de/CodeSystem/dimdi/icd-10-gm",
+        "version": "2020",
+        "code": "S50.0",
+        "display": "Prellung des Ellenbogens"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "91613004",
+        "display": "Contusion of elbow (disorder)"
+      }
+    ],
+    "text": "Prellung des linken Ellenbogens"
+  },
+  "subject": {
+    "identifier": {
+      "system": "DIZ_ID",
+      "value": "005TY0EC"
+    }
+  }
+}
+// POST http://localhost:8090/fhir/Condition
+// HTTP/1.1 201 Created
+// Last-Modified: Fri, 22 Mar 2024 13:52:42 GMT
+// ETag: W/"8"
+// Location: http://localhost:8080/fhir/Condition/DDTGN5W6O3JG7DSN/_history/8
+// Content-Type: application/fhir+json;charset=utf-8
+// Access-Control-Allow-Origin: *
+// Server: Blaze/0.25.0
+// Content-Length: 708
+// Request duration: 0.072279s
+#+END_SRC
+
+** Anlegen einer Beispiel Procedure
+#+begin_src restclient
+POST :ROUTINE_FHIR_INTERFACE/Procedure
+Content-Type: application/fhir+json
+
+{
+    "resourceType": "Procedure",
+    "status": "completed",
+    "category": {
+        "coding":  [
+            {
+                "system": "http://snomed.info/sct",
+                "code": "387713003",
+                "display": "Surgical procedure (procedure)"
+            }
+        ]
+    },
+    "code": {
+        "coding":  [
+            {
+                "system": "http://snomed.info/sct",
+                "code": "80146002",
+                "display": "Excision of appendix (procedure)"
+            },
+            {
+                "system": "http://fhir.de/CodeSystem/dimdi/ops",
+                "version": "2020",
+                "code": "5-470",
+                "display": "Appendektomie"
+            }
+        ]
+    },
+    "performedDateTime": "2020-04-23",
+    "subject": {
+        "identifier": {
+            "system": "DIZ_ID",
+            "value": "005TY0EC"
+        }
+    }
+}
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "category": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "387713003",
+        "display": "Surgical procedure (procedure)"
+      }
+    ]
+  },
+  "meta": {
+    "versionId": "9",
+    "lastUpdated": "2024-03-22T13:56:10.253Z"
+  },
+  "resourceType": "Procedure",
+  "status": "completed",
+  "id": "DDTGOKMW4ML7HSCJ",
+  "performedDateTime": "2020-04-23",
+  "code": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "80146002",
+        "display": "Excision of appendix (procedure)"
+      },
+      {
+        "system": "http://fhir.de/CodeSystem/dimdi/ops",
+        "version": "2020",
+        "code": "5-470",
+        "display": "Appendektomie"
+      }
+    ]
+  },
+  "subject": {
+    "identifier": {
+      "system": "DIZ_ID",
+      "value": "005TY0EC"
+    }
+  }
+}
+// POST http://localhost:8090/fhir/Procedure
+// HTTP/1.1 201 Created
+// Last-Modified: Fri, 22 Mar 2024 13:56:10 GMT
+// ETag: W/"9"
+// Location: http://localhost:8080/fhir/Procedure/DDTGOKMW4ML7HSCJ/_history/9
+// Content-Type: application/fhir+json;charset=utf-8
+// Access-Control-Allow-Origin: *
+// Server: Blaze/0.25.0
+// Content-Length: 584
+// Request duration: 0.066382s
+#+END_SRC
+
+* Footnotes
+
+[fn:1] https://www.medizininformatik-initiative.de/Kerndatensatz/Modul_Consent/IGMIIKDSModulConsent-TechnischeImplementierung-FHIRProfile-WeitererelevanteProfile.html
