@@ -9,19 +9,24 @@ Zu Grunde gelegt wird, das an den Standorten bereits folgende Infrastruktur vorh
 Zusätzlich müssen Forschungsprojekte eine Einwilligung der Probanden einholen um die Daten der Routineversorgung nachladen zu dürfen.
 
 * Datenfluss im Detail
+Im Rahmen der Datenflussprozesse werden die folgenden Variablen als Konfigurationsparameter verwendet. In der finalen Software werden diese auch ein Teil der Konfiguration sein.
 #+PROPERTY: header-args :var
 #+PROPERTY: header-args+ MAINZELLISTE_INTERFACE="http://localhost:8081/fhir"
 #+PROPERTY: header-args+ ROUTINE_CONNECTOR_API_KEY="routine-connector-password"
-#+PROPERTY: header-args+ DIZ_API_KEY="diz-password"
+#+PROPERTY: header-args+ ROUTINE_FHIR_INTERFACE="http://localhost:8090/fhir"
+Ebenfalls wird der Routine Connector auch Konfigurationsparameter pro Projekt erhalten müssen, festzulegen sind dabei
 #+PROPERTY: header-args+ CONSENT_FHIR_INTERFACE="http://localhost:8085/fhir"
 #+PROPERTY: header-args+ MDAT_FHIR_INTERFACE="http://localhost:8086/fhir"
-#+PROPERTY: header-args+ ROUTINE_FHIR_INTERFACE="http://localhost:8090/fhir"
 #+PROPERTY: header-args+ PROJECT_FHIR_INTERFACE="http://localhost:8095/fhir"
-Im Folgenden werden die 3 Phasen der Datenübertragung im Detail beschrieben.
+
+Auf der Seite der Transferstelle sind dabei ebenfalls die Parameter `CONSENT_FHIR_INTERFACE` und `MDAT_FHIR_INTERFACE` pro Projekt festzulegen, zusätzlich wird ein eigenes Passwort für die Standort TTP
+#+PROPERTY: header-args+ DIZ_API_KEY="diz-password"
+sowie die Adresse des Standort-TTP FHIR Interface festgelegt.
 ** 1) Anfrage von Daten
-Im ersten Schritt meldet der Routine Connector der Standort-TTP den Consent des Patienten und erhält dafür ein Projektbezogenes Pseudonym. Daraufhin holt sich der Routine Connector von der Standort-TTP den gespeicherten Consent und ersetzt den darin zurückgemeldeten Patientenidentifier durch das von der Standort-TTP erhaltene Pseudonym
+Um Daten bei der Transferstelle abzufragen muss der Routine Connector den Consent eines Patienten als Beweis für die Einwilligung in die Übermittlung von Daten vorlegen. Dieser wird sowohl in der Standort TTP als auch im Consent Fhir Server hinterlegt.
+Die Funktionen der Stand
 *** 1.1) Erzeugung Projektpseudonym (Mainzelliste)
-Der Routine Connector führt zu Beginn einen POST request
+Zu Beginn erzeugt der Routine Connector bei der Standort-TTP (in diesem Fall eine Mainzelliste) ein neues Projekt bezogenes Patientenpseudonym.
 #+NAME: patient-fhir-data
 #+begin_src restclient :results value
 POST :MAINZELLISTE_INTERFACE/Patient
@@ -52,8 +57,9 @@ mainzellisteApiKey: :ROUTINE_CONNECTOR_API_KEY
     ]
 }
 #+end_src
-
+Als Antwort erhält der Routine Connector die vollständige FHIR-Resource mit dem neu angelegten Pseudonym
 #+RESULTS: patient-fhir-data
+#+begin_example
 {
   "resourceType": "Patient",
   "id": "0003Y0WZ",
@@ -85,9 +91,40 @@ mainzellisteApiKey: :ROUTINE_CONNECTOR_API_KEY
   ],
   "birthDate": "1981-01-31"
 }
-
+#+end_example
+{
+  "resourceType": "Patient",
+  "id": "0003Y0WZ",
+  "identifier": [
+    {
+      "use": "secondary",
+      "system": "PROJECT_1_ID",
+      "value": "7LCJA1AP"
+    },
+    {
+      "use": "secondary",
+      "system": "INTERNAL_ID",
+      "value": "0003Y0WZ"
+    },
+    {
+      "use": "secondary",
+      "system": "SESSION_ID",
+      "value": "00VNY0RG"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "Timberlake",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "birthDate": "1981-01-31"
+}
 *** 1.2) Extraktion Daten aus Antwort TTP
-Der Routine Connector meldet das Consent mit dem von der TTP gemeldeten Identifier an die weiteren Stellen, dafür muss zunächst die Session ID extrahiert werden.
+Der Routine Connector meldet das Consent mit dem von der TTP erhaltenen Identifier an den Consent FHIR-Server. Der dafür Notwendige Session Identifier lässt sich aus der TTP Antwort extrahieren
 #+NAME: session-id-from-fhir
 #+begin_src sh :var data=patient-fhir-data
 echo "$data" | jq -c '[.identifier[] | select(.system | contains("SESSION_ID")) | .value][0]'
@@ -96,7 +133,7 @@ echo "$data" | jq -c '[.identifier[] | select(.system | contains("SESSION_ID")) 
 #+RESULTS: session-id-from-fhir
 : 00VNY0RG
 
-Ebenfalls muss die Projekt_ID extrahiert werden:
+Neben dem Session Identifier lädt der Routine Connector ebenfalls die Projekt ID aus der TTP Antwort. Diese wird aber nicht mit an den FHIR Server übermittelt, um eine ungewollte Zusammenführung von Projektdaten durch die Transferstelle zu verhindern.
 #+NAME: project-id-from-fhir
 #+begin_src sh :var data=patient-fhir-data
 echo "$data" | jq -c '[.identifier[] | select(.system | contains("PROJECT_1_ID")) | .value][0]'
@@ -105,7 +142,7 @@ echo "$data" | jq -c '[.identifier[] | select(.system | contains("PROJECT_1_ID")
 #+RESULTS: project-id-from-fhir
 : 7LCJA1AP
 *** TODO 1.3) Dokumentation des Consents in Standort-TTP
-Mit den extrahierten Pseudonymen, meldet der Routine Connector das Consent nun an die Standort TTP
+Das Consent des Patienten wird zu Dokumentationszwecken auch in der Standort-TTP hinterlegt. Der Routine Connector erhält die FHIR Resource hierfür als Input und ergänzt nur den bereits aus 1.2 bekannten Session Identifier.
 #+begin_src restclient :var session_id=session-id-from-fhir
 POST :MAINZELLISTE_INTERFACE/Consent
 Content-Type: application/fhir+json
@@ -295,7 +332,7 @@ Content-Type: application/fhir+json
 
 Der zurückgegebene Consent enthält als Identifier des dazugehörigen Patient nur die SESSION_ID, wodurch die Transferstelle später nicht die Projekt ID ermitteln kann.
 *** 1.4) Meldung des Consent an die Inbox
-Hierfür wird die gleiche Request wie auch in 1.3 an den CONSENT FHIR Server durchgeführt.
+Nach dem Melden des Consent an die TTP wird dieser ebenfalls an den Consent FHIR-Server übermittelt und wird somit auch der Transferstelle bekannt gemacht
 #+begin_src restclient :var session_id=session-id-from-fhir
 POST :CONSENT_FHIR_INTERFACE/Consent
 Content-Type: application/fhir+json
@@ -606,7 +643,7 @@ Content-Type: application/fhir+json
   },
   "meta": {
     "versionId": "1",
-    "lastUpdated": "2024-03-22T10:54:05.703Z"
+    "lastUpdated": "2024-03-25T14:25:48.787Z"
   },
   "organization": [
     {
@@ -629,7 +666,7 @@ Content-Type: application/fhir+json
   ],
   "dateTime": "2020-01-01",
   "status": "active",
-  "id": "DDTFZPTVOFVKRGAV",
+  "id": "DDTWADIKWQCFRBVH",
   "policyRule": {
     "extension": [
       {
@@ -642,14 +679,14 @@ Content-Type: application/fhir+json
 }
 // POST http://localhost:8085/fhir/Consent
 // HTTP/1.1 201 Created
-// Last-Modified: Fri, 22 Mar 2024 10:54:05 GMT
+// Last-Modified: Mon, 25 Mar 2024 14:25:48 GMT
 // ETag: W/"1"
-// Location: http://localhost:8080/fhir/Consent/DDTFZPTVOFVKRGAV/_history/1
+// Location: http://localhost:8080/fhir/Consent/DDTWADIKWQCFRBVH/_history/1
 // Content-Type: application/fhir+json;charset=utf-8
 // Access-Control-Allow-Origin: *
 // Server: Blaze/0.25.0
 // Content-Length: 2207
-// Request duration: 0.202944s
+// Request duration: 0.310278s
 #+END_SRC
 
 ** 2) Bereitstellung von Daten
@@ -666,6 +703,200 @@ lastUpdated=gt(:last-request-date)
 #+end_src
 
 #+RESULTS: consents-from-inbox
+{
+  "id": "DDTWAEBN2QKATZRT",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "http://localhost:8080/fhir/Consent/DDTWADIKWQCFRBVH",
+      "resource": {
+        "patient": {
+          "identifier": {
+            "system": "SESSION_ID",
+            "value": "00VNY0RG"
+          }
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "57016-8"
+              }
+            ]
+          }
+        ],
+        "provision": {
+          "provision": [
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.6",
+                      "display": "MDAT_erheben"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2025-08-31"
+              }
+            },
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.7",
+                      "display": "MDAT_speichern_verarbeiten"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2050-08-31"
+              }
+            },
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.8",
+                      "display": "MDAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2050-08-31"
+              }
+            },
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.19",
+                      "display": "BIOMAT_erheben"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2025-08-31"
+              }
+            },
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.20",
+                      "display": "BIOMAT_lagern_verarbeiten"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2050-08-31"
+              }
+            },
+            {
+              "type": "permit",
+              "code": [
+                {
+                  "coding": [
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                      "code": "2.16.840.1.113883.3.1937.777.24.5.3.22",
+                      "display": "BIOMAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                    }
+                  ]
+                }
+              ],
+              "period": {
+                "start": "2020-09-01",
+                "end": "2050-08-31"
+              }
+            }
+          ],
+          "type": "permit",
+          "period": {
+            "start": "2020-09-01",
+            "end": "2050-08-31"
+          }
+        },
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2024-03-25T14:25:48.787Z"
+        },
+        "organization": [
+          {
+            "display": "Some University Clinic"
+          }
+        ],
+        "resourceType": "Consent",
+        "scope": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+              "code": "research"
+            }
+          ]
+        },
+        "policy": [
+          {
+            "uri": "/Questionnaire/Mii-Broad-Consent"
+          }
+        ],
+        "dateTime": "2020-01-01",
+        "status": "active",
+        "id": "DDTWADIKWQCFRBVH",
+        "policyRule": {
+          "extension": [
+            {
+              "url": "http://fhir.de/ConsentManagement/StructureDefinition/Xacml",
+              "valueBase64Binary": "TUlJIEJDIEV4YW1wbGUgWEFDTUw="
+            }
+          ],
+          "text": "siehe eingebettetes XACML"
+        }
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ],
+  "link": [
+    {
+      "relation": "first",
+      "url": "http://localhost:8080/fhir/Consent/__page?_count=50&__t=1"
+    },
+    {
+      "relation": "self",
+      "url": "http://localhost:8080/fhir/Consent?_count=50"
+    }
+  ],
+  "total": 1,
+  "resourceType": "Bundle"
+}
 {
   "id": "DDTF3GJEW4KWNVMA",
   "type": "searchset",
@@ -874,9 +1105,9 @@ echo "$data" | jq '[.entry[].resource.patient.identifier]'
 :     "value": "00VNY0RG"
 :   }
 : ]
-*** TODO 2.3) Validierung der Consents
+*** TODO 2.x) Validierung der Consents
 An dieser Stelle muss die Transferstelle aufgrund der Angaben in den Consents überprüfen, ob die Einwilligung des Patienten noch gültig ist. Nicht mehr gültige Datensätze werden für die folgenden Schritte rausgefiltert.
-*** 2.4) Ermittlung zugehöriger DIZ Pseudonyme
+*** 2.3) Ermittlung zugehöriger DIZ Pseudonyme
 Mit der Extrahierten Liste an SESSION_IDs kann die Transferstelle nun bei der lokalen TTP eine Liste von Patienten abfragen. Dafür muss pro Identifier eine Patientenresource abfragt werden:
 #+begin_src restclient
 POST :MAINZELLISTE_INTERFACE/Patient/_search
@@ -941,13 +1172,13 @@ identifier=SESSION_ID|00VNY0RG
 // Server: Mainzelliste/1.12.0
 // Content-Type: application/fhir+json
 // Content-Length: 467
-// Date: Fri, 22 Mar 2024 11:40:57 GMT
+// Date: Mon, 25 Mar 2024 14:26:33 GMT
 // Keep-Alive: timeout=20
 // Connection: keep-alive
-// Request duration: 0.118860s
+// Request duration: 0.127703s
 #+END_SRC
 
-*** 2.5) Sammeln der Routine Daten zu dem Patienten
+*** 2.4) Sammeln der Routine Daten zu dem Patienten
 In diesem Schritt werden die zu den DIZ Pseudonymen gefundenen Datensätze aus dem Routine FHIR Store geladen. Hierbei wird pro Pseudonym eine Anfrage über FHIR Bundles gestellt, über die alle relevanten Resourcen abgefragt werden. Die relevanten Resourcen werden im Projektantrag festgelegt. Ebenso wird beachtet, wann die Resourcen das letzte mal übermittelt werden, so dass nicht bei jeder Anfrage alle Daten erneut an die Outbox übermittelt werden.
 #+NAME: routine-data-for-patient
 #+begin_src restclient :var last-update="2024-03-21T13:52:42.493Z" :results value
@@ -981,6 +1212,64 @@ Content-Type: application/fhir+json
 #+end_src
 
 #+RESULTS: routine-data-for-patient
+{
+  "id": "DDTWAJE64GVNA3E5",
+  "type": "batch-response",
+  "entry": [
+    {
+      "response": {
+        "status": "200"
+      },
+      "resource": {
+        "id": "DDTWAJE6NRHD4HFR",
+        "type": "searchset",
+        "total": 0,
+        "link": [
+          {
+            "relation": "self",
+            "url": "http://localhost:8080/fhir/MedicationStatement?subject%3Aidentifier=DIZ_ID%7C005TY0EC&_lastUpdated=gt2024-03-21T13%3A52%3A42.493Z&_count=50"
+          }
+        ],
+        "resourceType": "Bundle"
+      }
+    },
+    {
+      "response": {
+        "status": "200"
+      },
+      "resource": {
+        "id": "DDTWAJE6Z24UPPOB",
+        "type": "searchset",
+        "total": 0,
+        "link": [
+          {
+            "relation": "self",
+            "url": "http://localhost:8080/fhir/Condition?subject%3Aidentifier=DIZ_ID%7C005TY0EC&_lastUpdated=gt2024-03-21T13%3A52%3A42.493Z&_count=50"
+          }
+        ],
+        "resourceType": "Bundle"
+      }
+    },
+    {
+      "response": {
+        "status": "200"
+      },
+      "resource": {
+        "id": "DDTWAJE62TSUHQGC",
+        "type": "searchset",
+        "total": 0,
+        "link": [
+          {
+            "relation": "self",
+            "url": "http://localhost:8080/fhir/Procedure?subject%3Aidentifier=DIZ_ID%7C005TY0EC&_lastUpdated=gt2024-03-21T13%3A52%3A42.493Z&_count=50"
+          }
+        ],
+        "resourceType": "Bundle"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}
 {
   "id": "DDTGX3CHIDBUEI74",
   "type": "batch-response",
@@ -1147,20 +1436,20 @@ Content-Type: application/fhir+json
   "resourceType": "Bundle"
 }
 
-*** TODO 2.6) Ermitteln der zuletzt aktualisierten Versionen
-In der Ausgabe von 2.5 kann es passieren, dass für einen Patienten mehrmals dieselbe Resource, aber in unterschiedlichen Versionen zurückgegeben wird, z. Bsp. wenn die Dokumentation einer durchgeführten Prozedur zwischenzeitlich mehrfach geändert wurde.
+*** TODO 2.x) Ermitteln der zuletzt aktualisierten Versionen
+In der Ausgabe von 2.4 kann es passieren, dass für einen Patienten mehrmals dieselbe Resource, aber in unterschiedlichen Versionen zurückgegeben wird, z. Bsp. wenn die Dokumentation einer durchgeführten Prozedur zwischenzeitlich mehrfach geändert wurde.
 Daher muss die Transferstelle an dieser Stelle die letzte Version filtern.
-*** 2.7) Übermittlung der an die Outbox
+*** 2.5) Übermittlung der an die Outbox
 Das hochladen der Daten wird in Form eines Bundles gemacht, da wir hier vermutlich viele Resourcen auf einmal hochladen müssen
 
-#+begin_src restclient :var condition=condition-resource :var procedure=procedure-resource
+#+begin_src restclient
 POST :MDAT_FHIR_INTERFACE/Bundle
 Content-Type: application/fhir+json
 
 {
     "resourceType": "Bundle",
     "type": "transaction",
-	"entry": [
+    "entry": [
         {
             "resource": {
         "patient": {
@@ -1440,12 +1729,12 @@ Content-Type: application/fhir+json
 #+BEGIN_SRC js
 {
   "meta": {
-    "versionId": "2",
-    "lastUpdated": "2024-03-22T15:08:10.694Z"
+    "versionId": "1",
+    "lastUpdated": "2024-03-25T14:28:01.474Z"
   },
   "type": "transaction",
   "resourceType": "Bundle",
-  "id": "DDTGWSDDC5RYW7AV",
+  "id": "DDTWALLM5YB5ET5O",
   "entry": [
     {
       "request": {
@@ -1722,14 +2011,14 @@ Content-Type: application/fhir+json
 }
 // POST http://localhost:8086/fhir/Bundle
 // HTTP/1.1 201 Created
-// Last-Modified: Fri, 22 Mar 2024 15:08:10 GMT
-// ETag: W/"2"
-// Location: http://localhost:8080/fhir/Bundle/DDTGWSDDC5RYW7AV/_history/2
+// Last-Modified: Mon, 25 Mar 2024 14:28:01 GMT
+// ETag: W/"1"
+// Location: http://localhost:8080/fhir/Bundle/DDTWALLM5YB5ET5O/_history/1
 // Content-Type: application/fhir+json;charset=utf-8
 // Access-Control-Allow-Origin: *
 // Server: Blaze/0.25.0
 // Content-Length: 3826
-// Request duration: 0.086848s
+// Request duration: 0.452533s
 #+END_SRC
 
 ** 3) Abholen der Daten
@@ -1741,25 +2030,674 @@ Daher wird hier eine Methode basierend auf FHIR Bundles genutzt: https://build.f
 GET :MDAT_FHIR_INTERFACE/Bundle?_lastUpdated=gt:last-update
 Content-Type: application/fhir+json
 #+end_src
-*** 3.2) Ergänzen des Projektidentifier
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "id": "DDTWAMJPERHY5QLN",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "http://localhost:8080/fhir/Bundle/DDTWALLM5YB5ET5O",
+      "resource": {
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2024-03-25T14:28:01.474Z"
+        },
+        "type": "transaction",
+        "resourceType": "Bundle",
+        "id": "DDTWALLM5YB5ET5O",
+        "entry": [
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Consent"
+            },
+            "resource": {
+              "patient": {
+                "identifier": {
+                  "system": "SESSION_ID",
+                  "value": "00VNY0RG"
+                }
+              },
+              "category": [
+                {
+                  "coding": [
+                    {
+                      "system": "http://loinc.org",
+                      "code": "57016-8"
+                    }
+                  ]
+                }
+              ],
+              "provision": {
+                "provision": [
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.6",
+                            "display": "MDAT_erheben"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2025-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.7",
+                            "display": "MDAT_speichern_verarbeiten"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.8",
+                            "display": "MDAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.19",
+                            "display": "BIOMAT_erheben"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2025-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.20",
+                            "display": "BIOMAT_lagern_verarbeiten"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.22",
+                            "display": "BIOMAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  }
+                ],
+                "type": "permit",
+                "period": {
+                  "start": "2020-09-01",
+                  "end": "2050-08-31"
+                }
+              },
+              "meta": {
+                "versionId": "1",
+                "lastUpdated": "2024-03-22T10:54:05.703Z"
+              },
+              "organization": [
+                {
+                  "display": "Some University Clinic"
+                }
+              ],
+              "resourceType": "Consent",
+              "scope": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+                    "code": "research"
+                  }
+                ]
+              },
+              "policy": [
+                {
+                  "uri": "/Questionnaire/Mii-Broad-Consent"
+                }
+              ],
+              "dateTime": "2020-01-01",
+              "status": "active",
+              "id": "DDTFZPTVOFVKRGAV",
+              "policyRule": {
+                "extension": [
+                  {
+                    "url": "http://fhir.de/ConsentManagement/StructureDefinition/Xacml",
+                    "valueBase64Binary": "TUlJIEJDIEV4YW1wbGUgWEFDTUw="
+                  }
+                ],
+                "text": "siehe eingebettetes XACML"
+              }
+            }
+          },
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Condition"
+            },
+            "resource": {
+              "clinicalStatus": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                    "code": "active"
+                  }
+                ]
+              },
+              "meta": {
+                "versionId": "8",
+                "lastUpdated": "2024-03-22T13:52:42.493Z"
+              },
+              "onsetPeriod": {
+                "start": "2020-02-26T12:00:00+01:00",
+                "end": "2020-03-05T13:00:00+01:00"
+              },
+              "resourceType": "Condition",
+              "recordedDate": "2020-02-26T12:00:00+01:00",
+              "id": "DDTGN5W6O3JG7DSN",
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://fhir.de/CodeSystem/dimdi/icd-10-gm",
+                    "version": "2020",
+                    "code": "S50.0",
+                    "display": "Prellung des Ellenbogens"
+                  },
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "91613004",
+                    "display": "Contusion of elbow (disorder)"
+                  }
+                ],
+                "text": "Prellung des linken Ellenbogens"
+              },
+              "subject": {
+                "identifier": {
+                  "system": "DIZ_ID",
+                  "value": "005TY0EC"
+                }
+              }
+            }
+          },
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Procedure"
+            },
+            "resource": {
+              "category": {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "387713003",
+                    "display": "Surgical procedure (procedure)"
+                  }
+                ]
+              },
+              "meta": {
+                "versionId": "9",
+                "lastUpdated": "2024-03-22T13:56:10.253Z"
+              },
+              "resourceType": "Procedure",
+              "status": "completed",
+              "id": "DDTGOKMW4ML7HSCJ",
+              "performedDateTime": "2020-04-23",
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "80146002",
+                    "display": "Excision of appendix (procedure)"
+                  },
+                  {
+                    "system": "http://fhir.de/CodeSystem/dimdi/ops",
+                    "version": "2020",
+                    "code": "5-470",
+                    "display": "Appendektomie"
+                  }
+                ]
+              },
+              "subject": {
+                "identifier": {
+                  "system": "DIZ_ID",
+                  "value": "005TY0EC"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ],
+  "link": [
+    {
+      "relation": "first",
+      "url": "http://localhost:8080/fhir/Bundle/__page?_lastUpdated=gt2024-03-21&_count=50&__t=1"
+    },
+    {
+      "relation": "self",
+      "url": "http://localhost:8080/fhir/Bundle?_lastUpdated=gt2024-03-21&_count=50"
+    }
+  ],
+  "total": 1,
+  "resourceType": "Bundle"
+}
+// GET http://localhost:8086/fhir/Bundle?_lastUpdated=gt2024-03-21
+// HTTP/1.1 200 OK
+// Link: <http://localhost:8080/fhir/Bundle/__page?_lastUpdated=gt2024-03-21&_count=50&__t=1>;rel="first",<http://localhost:8080/fhir/Bundle?_lastUpdated=gt2024-03-21&_count=50>;rel="self"
+// Content-Type: application/fhir+json;charset=utf-8
+// Access-Control-Allow-Origin: *
+// Server: Blaze/0.25.0
+// Content-Length: 4236
+// Request duration: 0.047349s
+#+END_SRC
+
+*** 3.x) Ergänzen des Projektidentifier
 In dem erhaltenen FHIR Bundle ist jetzt überall der Identifier SESSION_ID enthalten. Dieser muss durch den Routine Connector durch PROJECT_1_ID ersetzt werden.
-*** 3.3) Laden der Routine Daten in Projektdatenbank
+*** 3.2) Laden der Routine Daten in Projektdatenbank
 Das Laden der Routine Daten in die Projektdatenbank funktioniert analog zu dem Laden in 2.4. Hierbei ist zu beachten, dass nur die aktuellsten Resourcen an die Projektdatenbank übermittelt werden sollen, da die Anfrage in 3.1 auch mehrmals die gleiche Resource zurückgegeben kann, eben in unterschiedlichen Versionen.
 Der Routine Connector baut deshalb vor dem Hochladen der Daten ein FHIR Bundle mit allen relevanten Resourcen zusammen und übermittelt dieses an die Adresse
-#+begin_src restclient
+#+begin_src restclient :var project-id=project-id-from-fhir
 POST :PROJECT_FHIR_INTERFACE
 Content-Type: application/fhir+json
 
-<modified-bundle-from-3.3>
+{
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2024-03-25T14:28:01.474Z"
+        },
+        "type": "transaction",
+        "resourceType": "Bundle",
+        "id": "DDTWALLM5YB5ET5O",
+        "entry": [
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Consent"
+            },
+            "resource": {
+              "patient": {
+                "identifier": {
+                  "system": "PROJECT_1_ID",
+                  "value": ":project-id-from-fhir"
+                }
+              },
+              "category": [
+                {
+                  "coding": [
+                    {
+                      "system": "http://loinc.org",
+                      "code": "57016-8"
+                    }
+                  ]
+                }
+              ],
+              "provision": {
+                "provision": [
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.6",
+                            "display": "MDAT_erheben"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2025-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.7",
+                            "display": "MDAT_speichern_verarbeiten"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.8",
+                            "display": "MDAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.19",
+                            "display": "BIOMAT_erheben"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2025-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.20",
+                            "display": "BIOMAT_lagern_verarbeiten"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  },
+                  {
+                    "type": "permit",
+                    "code": [
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.3.1937.777.24.5.3",
+                            "code": "2.16.840.1.113883.3.1937.777.24.5.3.22",
+                            "display": "BIOMAT_wissenschaftlich_nutzen_EU_DSGVO_NIVEAU"
+                          }
+                        ]
+                      }
+                    ],
+                    "period": {
+                      "start": "2020-09-01",
+                      "end": "2050-08-31"
+                    }
+                  }
+                ],
+                "type": "permit",
+                "period": {
+                  "start": "2020-09-01",
+                  "end": "2050-08-31"
+                }
+              },
+              "meta": {
+                "versionId": "1",
+                "lastUpdated": "2024-03-22T10:54:05.703Z"
+              },
+              "organization": [
+                {
+                  "display": "Some University Clinic"
+                }
+              ],
+              "resourceType": "Consent",
+              "scope": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+                    "code": "research"
+                  }
+                ]
+              },
+              "policy": [
+                {
+                  "uri": "/Questionnaire/Mii-Broad-Consent"
+                }
+              ],
+              "dateTime": "2020-01-01",
+              "status": "active",
+              "id": "DDTFZPTVOFVKRGAV",
+              "policyRule": {
+                "extension": [
+                  {
+                    "url": "http://fhir.de/ConsentManagement/StructureDefinition/Xacml",
+                    "valueBase64Binary": "TUlJIEJDIEV4YW1wbGUgWEFDTUw="
+                  }
+                ],
+                "text": "siehe eingebettetes XACML"
+              }
+            }
+          },
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Condition"
+            },
+            "resource": {
+              "clinicalStatus": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                    "code": "active"
+                  }
+                ]
+              },
+              "meta": {
+                "versionId": "8",
+                "lastUpdated": "2024-03-22T13:52:42.493Z"
+              },
+              "onsetPeriod": {
+                "start": "2020-02-26T12:00:00+01:00",
+                "end": "2020-03-05T13:00:00+01:00"
+              },
+              "resourceType": "Condition",
+              "recordedDate": "2020-02-26T12:00:00+01:00",
+              "id": "DDTGN5W6O3JG7DSN",
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://fhir.de/CodeSystem/dimdi/icd-10-gm",
+                    "version": "2020",
+                    "code": "S50.0",
+                    "display": "Prellung des Ellenbogens"
+                  },
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "91613004",
+                    "display": "Contusion of elbow (disorder)"
+                  }
+                ],
+                "text": "Prellung des linken Ellenbogens"
+              },
+              "subject": {
+                "identifier": {
+                  "system": "DIZ_ID",
+                  "value": "005TY0EC"
+                }
+              }
+            }
+          },
+          {
+            "request": {
+              "method": "POST",
+              "url": "/Procedure"
+            },
+            "resource": {
+              "category": {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "387713003",
+                    "display": "Surgical procedure (procedure)"
+                  }
+                ]
+              },
+              "meta": {
+                "versionId": "9",
+                "lastUpdated": "2024-03-22T13:56:10.253Z"
+              },
+              "resourceType": "Procedure",
+              "status": "completed",
+              "id": "DDTGOKMW4ML7HSCJ",
+              "performedDateTime": "2020-04-23",
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "80146002",
+                    "display": "Excision of appendix (procedure)"
+                  },
+                  {
+                    "system": "http://fhir.de/CodeSystem/dimdi/ops",
+                    "version": "2020",
+                    "code": "5-470",
+                    "display": "Appendektomie"
+                  }
+                ]
+              },
+              "subject": {
+                "identifier": {
+                  "system": "DIZ_ID",
+                  "value": "005TY0EC"
+                }
+              }
+            }
+          }
+        ]
+      }
 #+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "id": "DDTWBABWDGLWQZ2Y",
+  "type": "transaction-response",
+  "entry": [
+    {
+      "response": {
+        "status": "201",
+        "location": "http://localhost:8080/fhir/Consent/DDTWBABVJFHEGLWW/_history/2",
+        "etag": "W/\"2\"",
+        "lastModified": "2024-03-25T14:33:40.444Z"
+      }
+    },
+    {
+      "response": {
+        "status": "201",
+        "location": "http://localhost:8080/fhir/Condition/DDTWBABVJFHEGLWX/_history/2",
+        "etag": "W/\"2\"",
+        "lastModified": "2024-03-25T14:33:40.444Z"
+      }
+    },
+    {
+      "response": {
+        "status": "201",
+        "location": "http://localhost:8080/fhir/Procedure/DDTWBABVJFHEGLWY/_history/2",
+        "etag": "W/\"2\"",
+        "lastModified": "2024-03-25T14:33:40.444Z"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}
+// POST http://localhost:8095/fhir
+// HTTP/1.1 200 OK
+// Content-Type: application/fhir+json;charset=utf-8
+// Access-Control-Allow-Origin: *
+// Server: Blaze/0.25.0
+// Content-Length: 588
+// Request duration: 0.023219s
+#+END_SRC
+
 * Aktuelle Fragen
 1) Soll die Inbox persistent sein, d.h. eingefügte Consents werden dauerhaft gespeichert und nicht nach der Übertragung gelöscht?
    Pro: Daten in der Outbox bleiben aktuell --> vor allem bei Einwilligungen für die Nächsten X Jahre sinnvoll
    Contra: Der Identifier Session kann keine Temporär erzeugte ID sein, da diese dann ja ihre Gültigkeit davor verlieren würde
-2) Wo wird der Kommunikationsidentifier erzeugt?
+2) Wo wird Token erzeugt?
    Im Routine Connector --> funktioniert nicht, da die Standort TTP das ja nicht verknüpfen kann
    In der TTP --> kann die TTP das überhaupt auflösen?
+   ==> Das kann eigentlich nur die TTP erzeugen
 3) Soll der Routine Connector mehrere Projektdatenbanken unterstützen?
    Dann wäre eine Konfiguration von Projektidentifier und zugehörigen Projektdatenbanken notwendig.
-* Weitere Aufgaben
-** Schnittstellen der Greifswald THS genauer überprüfen und Abfragen
+4) Wie lassen sich alle vorhandenen Daten zum Patienten ermitteln?
+   Reicht die Abfrage subject.identifier=DIZ_ID|VALUE? Siehe 2.5
+   Abklären ob Funktion 2 überhaupt gewünscht, wenn ja: FHIR Server für ROutine Daten erwarten, fhir search parameter hinzufügen und schnittstelle von ID_Management abfragen
+5) Wie sieht bisher die Infrastruktur für ResearchProjekts aus?
+   Soweit ich es verstehe soll ein Consent auf ein ResearchProject verweisen. Dieses müsste dann ja mit der Consent Resource übermittelt werden. Einfach als Bundle?
+* Roadmap
+** Schnittstellen der Greifswald THS ebenfalls überprüfen
