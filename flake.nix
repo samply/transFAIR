@@ -25,26 +25,10 @@
           buildInputs = with pkgs; [ openssl ];
         in
         rec {
-          # nix build
-          packages.${name} = pkgs.rustPlatform.buildRustPackage {
-            inherit name;
-            src = ./.;
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-          };
-          defaultPackage = packages.${name};
-
-          # nix run
-          apps.${name} = flake-utils.lib.mkApp {
-            inherit name;
-            drv = packages.${name};
-          };
-          defaultApp = apps.${name};
-
           # nix develop
           devShells.default = pkgs.mkShell {
             inherit buildInputs nativeBuildInputs;
+            RUST_LOG="debug";
           };
         }
       );
