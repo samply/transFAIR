@@ -23,6 +23,58 @@ Zusätzlich müssen pro Projekt die folgenden Parameter benannt werden:
 | CONSENT_FHIR_INTERFACE | http://localhost:8085/fhir |              |
 | MDAT_FHIR_INTERFACE    | http://localhost:8086/fhir |              |
 | PROJECT_FHIR_INTERFACE | http://localhost:8095/fhir |              |
+* API
+Die API des Routine Connector besteht aus drei Schnittstellen, die nun beschrieben werden. Dabei werden folgenden Variablen verwendet um die Anfragen zu beschreiben:
+#+PROPERTY: header-args+ ROUTINE_CONNECTOR_INTERFACE="http://localhost:8080"
+| Variable                    | Wert                  | Beschreibung                                                                          |
+| ROUTINE_CONNECTOR_INTERFACE | http://localhost:8080 | Adresse unter welcher der Routine Connector durch einen Client aufgerufen werden kann |
+** POST /requests
+Erstellen einer neuen Anfrage für gelinkte Daten:
+#+begin_src restclient
+POST :ROUTINE_CONNECTOR_INTERFACE/requests
+
+{
+  "idat": {
+    "firstname": "...",
+    ...
+  },
+  "consent": <hl7-fhir-consent-resource>
+}
+#+end_src
+Bei der Verarbeitung der Anfrage werden die Schritte aus "Funktionsweise: 1)" durchgeführt. Im Erfolgsfall liefert der Routine Connector einen Link auf die neu erstellte Datenanfrage beim Datenintegrationszentrum:
+#+begin_src
+201 CREATED
+Location: :ROUTINE_CONNECTOR_INTERFACE/requests/<request-id>
+#+end_src
+** GET /requests/<request-id>
+Übersicht der laufenden Anfragen und dem aktuellen Status
+Prüft den Status einer Anfrage:
+#+begin_src restclient
+GET :ROUTINE_CONNECTOR_INTERFACE/requests/<request-id>
+#+end_src
+Als Antwort wird eine Übersicht aller laufenden Anfragen des Routine Connector angezeigt. Diese werden jeweils mit ID und Status gemeldet, wobei folgende Anfrage Status möglich sind
+| Status           | Bedeutung                                                                                                                    |
+| created          | Anfrage wurde beim Datenintegrationszentrum erstellt, bisher wurden aber keine Daten geliefert                               |
+| data-loaded      | Daten wurden vom Datenintegrationszentrum geliefert und in den Projektstore geladen                                          |
+| update-available | Es wurden bereits Daten in den Projektstore geladen, aber das Datenintegrationszentrum hat mittlerweile neue Daten geliefert |
+| error            | Ein Fehler ist bei der Anfrage aufgetreten, dieser kann in den Logs verfolgt identifiziert werden                            |
+#+begin_src
+200 OK
+
+{"id": "<request-id>", "status": "created|data-loaded|update-available|error"}
+#+end_src
+** GET /requests
+Prüft den Status aller Anfragen:
+#+begin_src restclient
+GET :ROUTINE_CONNECTOR_INTERFACE/requests
+#+end_src
+#+begin_src
+200 OK
+
+[
+  {"id": "<request-id>", "status": "created|data-loaded|update-available|error"}
+]
+#+end_src
 * Funktionsweise
 ** 1) Anfrage von Daten
 Um Daten bei der Transferstelle abzufragen muss der Routine Connector den Consent eines Patienten als Beweis für die Einwilligung in die Übermittlung von Daten vorlegen. Dieser wird sowohl in der Standort TTP als auch im Consent Fhir Server hinterlegt.
