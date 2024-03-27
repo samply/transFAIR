@@ -11,11 +11,14 @@ services:
     ports:
       - 8081:8080
     environment:
-      # Define these in the docker compose override
+      # Otherwise mainzelliste will request ML_API_KEY
       MANDATORY_VARIABLES: "ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE"
       ML_DB_NAME: mainzelliste
       ML_DB_USER: mainzelliste
       ML_DB_HOST: mainzelliste-db
+      ML_DB_PASS: "${ML_DB_PASS}"
+      ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE}"
+      ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE}"
     configs:
       - mainzelliste.docker.conf
     depends_on:
@@ -26,7 +29,7 @@ services:
     environment:
       POSTGRES_DB: mainzelliste
       POSTGRES_USER: mainzelliste
-      POSTGRES_PASSWORD: change-this-for-production
+      POSTGRES_PASSWORD: "${ML_DB_PASS}"
 
   # TODO: Alternative deployment version for Greifswald THS
   # will include a full set of epix, gics, gpas

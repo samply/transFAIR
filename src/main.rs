@@ -1,7 +1,13 @@
-use tracing::Level;
+use clap::Parser;
+use config::Config;
+use once_cell::sync::Lazy;
+use tracing::{Level, debug};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
 mod banner;
+mod config;
+
+static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 
 fn main() {
     tracing_subscriber::FmtSubscriber::builder()
@@ -10,4 +16,5 @@ fn main() {
         .finish()
         .init();
     banner::print_banner();
+    debug!("{:#?}", Lazy::force(&CONFIG));
 }
