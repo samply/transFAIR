@@ -3,6 +3,7 @@ package de.samply.transfair.reader;
 import de.samply.transfair.reader.amr.CsvReader;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
+import de.samply.transfair.reader.amr.LocationBuilder;
 
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +12,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Location;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -64,11 +66,16 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       return null; // Terminate reading
 
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
+    Map<String, Location> reportingCountryMap = new HashMap<String, Location>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
       Patient patient = patientMap.computeIfAbsent(record.get("PatientCounter"),
               key -> PatientBuilder.buildPatient(record));
+
+      // Create or retrieve the country
+      Location reportinfCountry = reportingCountryMap.computeIfAbsent(record.get("ReportingCountry"),
+              key -> LocationBuilder.buildReportingCountry(record));
 
       // Create the observation
       Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record);
@@ -86,6 +93,13 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       Bundle.BundleEntryComponent patientEntry = new Bundle.BundleEntryComponent();
       patientEntry.setResource(patient);
       bundle.addEntry(patientEntry);
+    }
+
+    // Pack the Location resources into the Bundle
+    for (Location location: reportingCountryMap.values()) {
+      Bundle.BundleEntryComponent locationEntry = new Bundle.BundleEntryComponent();
+      locationEntry.setResource(location);
+      bundle.addEntry(locationEntry);
     }
 
     return bundle;
