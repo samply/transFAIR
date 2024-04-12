@@ -1,6 +1,7 @@
 package de.samply.transfair.reader;
 
 import de.samply.transfair.reader.amr.CsvReader;
+import de.samply.transfair.reader.amr.EncounterBuilder;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
 import de.samply.transfair.reader.amr.LocationBuilder;
@@ -13,6 +14,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Location;
+import org.hl7.fhir.r4.model.Encounter;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -66,7 +68,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       return null; // Terminate reading
 
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
-    Map<String, Location> reportingCountryMap = new HashMap<String, Location>();
+    Map<String, Location> locationMap = new HashMap<String, Location>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
@@ -74,11 +76,17 @@ public class FhirAmrReader implements ItemReader<Bundle> {
               key -> PatientBuilder.buildPatient(record));
 
       // Create or retrieve the country
-      Location reportinfCountry = reportingCountryMap.computeIfAbsent(record.get("ReportingCountry"),
+      Location location = locationMap.computeIfAbsent(record.get("ReportingCountry"),
               key -> LocationBuilder.buildReportingCountry(record));
 
-      // Create the observation
-      Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record);
+      // Create the observation and associated Encounter
+      Encounter encounter = EncounterBuilder.buildEncounter(recordCounter, patient, location);
+      Observation observation = ObservationBuilder.buildObservation(recordCounter, encounter, patient, record);
+
+      // Pack the Encounter into the Bundle
+      Bundle.BundleEntryComponent encounterEntry = new Bundle.BundleEntryComponent();
+      encounterEntry.setResource(encounter);
+      bundle.addEntry(encounterEntry);
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
@@ -96,7 +104,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     }
 
     // Pack the Location resources into the Bundle
-    for (Location location: reportingCountryMap.values()) {
+    for (Location location: locationMap.values()) {
       Bundle.BundleEntryComponent locationEntry = new Bundle.BundleEntryComponent();
       locationEntry.setResource(location);
       bundle.addEntry(locationEntry);

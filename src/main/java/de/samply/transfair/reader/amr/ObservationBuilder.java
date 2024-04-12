@@ -4,6 +4,8 @@ import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.Encounter;
 
 import java.util.Map;
 
@@ -15,12 +17,13 @@ public class ObservationBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR Observation resource using attributes extracted from the record.
      *
-     * @param recordCounter   A counter for the record, used in generating the Observation ID.
-     * @param patient         The associated Patient for the Observation.
-     * @param record A map containing observation data, where keys represent data attributes.
+     * @param recordCounter A counter for the record, used in generating the Observation ID.
+     * @param encounter
+     * @param patient       The associated Patient for the Observation.
+     * @param record        A map containing observation data, where keys represent data attributes.
      * @return A constructed Observation resource with populated properties and extensions.
      */
-    public static Observation buildObservation(int recordCounter, Patient patient, Map<String, String> record) {
+    public static Observation buildObservation(int recordCounter, Encounter encounter, Patient patient, Map<String, String> record) {
         Observation observation = new Observation();
 
         String patientId = patient.getIdElement().getValueAsString();
@@ -40,6 +43,7 @@ public class ObservationBuilder extends ResourceBuilder {
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
         observation.setCode(new CodeableConcept().setText("Antibiotic Resistance"));
         observation.setValue(constructObjectValueCodeableConcept(pathogen, antibiotic, sir));
+        observation.setEncounter(new Reference(encounter));
 
         // Add extensions
         addIsolateIdExtension(observation, isolateId);
