@@ -1,16 +1,20 @@
 package de.samply.transfair.reader.amr;
 
+import lombok.extern.slf4j.Slf4j;
+import org.hl7.fhir.r4.model.DateTimeType;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
  * This is a utility class for constructing FHIR Observation resources and extensions
  * from data extracted from an AMR CSV file.
  */
+@Slf4j
 public class ObservationBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR Observation resource using attributes extracted from the record.
@@ -40,6 +44,10 @@ public class ObservationBuilder extends ResourceBuilder {
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
         observation.setCode(new CodeableConcept().setText("Antibiotic Resistance"));
         observation.setValue(constructObjectValueCodeableConcept(pathogen, antibiotic, sir));
+
+        // Set the effective date to the current date and time
+        ZonedDateTime currentTime = ZonedDateTime.now();
+        observation.setEffective(new DateTimeType(currentTime.toInstant().toString()));
 
         // Add extensions
         addIsolateIdExtension(observation, isolateId);
