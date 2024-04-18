@@ -10,6 +10,7 @@ use crate::requests::{create_data_request, list_data_requests, get_data_request}
 mod banner;
 mod config;
 mod requests;
+mod mainzelliste;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";

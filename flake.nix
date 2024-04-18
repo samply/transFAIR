@@ -42,6 +42,7 @@
             }
             '';
             RUST_LOG="trace";
+            no_proxy="localhost";
             # Environment for Mainzelliste
             ML_DB_PASS="my-secret-db-password";
             ML_ROUTINE_CONNECTOR_PASSPHRASE="routine-connector-password";
