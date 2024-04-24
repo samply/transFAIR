@@ -7,6 +7,10 @@ import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 import java.time.ZonedDateTime;
 import java.util.Map;
 
@@ -49,6 +53,15 @@ public class ObservationBuilder extends ResourceBuilder {
         // Set the effective date to the current date and time
         ZonedDateTime currentTime = ZonedDateTime.now();
         observation.setEffective(new DateTimeType(currentTime.toInstant().toString()));
+
+        // Experimentally use "issued" for statistics date
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+        try {
+            Date issuedDate = formatter.parse(dateUsedForStatistics);
+            observation.setIssued(issuedDate);
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
 
         // Add extensions
         addIsolateIdExtension(observation, isolateId);
