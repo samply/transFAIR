@@ -57,6 +57,7 @@ public class ObservationBuilder extends ResourceBuilder {
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
         addDateUsedForStatistics(observation, dateUsedForStatistics);
+        addDateUsedForStatisticsDate(observation, dateUsedForStatistics);
 
         return observation;
     }
@@ -113,6 +114,10 @@ public class ObservationBuilder extends ResourceBuilder {
 
     private static void addDateUsedForStatistics(Observation observation, String dateUsedForStatistics) {
         observation.addExtension(createStringExtension(dateUsedForStatistics, "https://ecdc.amr/fhir/StructureDefinition/ObservationDateUsedForStatistics"));
+    }
+
+    private static void addDateUsedForStatisticsDate(Observation observation, String dateUsedForStatistics) {
+        observation.addExtension(createDateExtension(dateUsedForStatistics, "https://ecdc.amr/fhir/StructureDefinition/ObservationDateUsedForStatisticsDate"));
     }
 
     /**

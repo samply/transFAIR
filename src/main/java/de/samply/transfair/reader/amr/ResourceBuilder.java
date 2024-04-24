@@ -2,6 +2,7 @@ package de.samply.transfair.reader.amr;
 
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.IntegerType;
+import org.hl7.fhir.r4.model.DateType;
 import org.hl7.fhir.r4.model.StringType;
 
 public abstract class ResourceBuilder {
@@ -20,4 +21,12 @@ public abstract class ResourceBuilder {
 //
 //        return extension;
 //    }
+
+    protected static Extension createDateExtension(String value, String url) {
+        Extension extension = new Extension();
+        extension.setUrl(url);
+        extension.setValue(new DateType(value));
+
+        return extension;
+    }
 }
