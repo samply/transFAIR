@@ -30,7 +30,7 @@ public class ObservationBuilder extends ResourceBuilder {
         String patientId = patient.getIdElement().getValueAsString();
         observation.setId(patientId + "." + recordCounter);
 
-        // Extract observation data from the map and set properties
+        // Extract observation data from the map
         String pathogen = record.get("Pathogen");
         String antibiotic = record.get("Antibiotic");
         String sir = record.get("SIR");
@@ -39,6 +39,7 @@ public class ObservationBuilder extends ResourceBuilder {
         String patientType = record.get("PatientType");
         String reportingCountry = record.get("ReportingCountry");
         String referenceGuidelinesSir = record.get("ReferenceGuidelinesSIR");
+        String dateUsedForStatistics = record.get("DateUsedForStatistics");
 
         // Set properties of the Observation
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
@@ -55,6 +56,7 @@ public class ObservationBuilder extends ResourceBuilder {
         addPatientTypeExtension(observation, patientType);
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
+        addDateUsedForStatistics(observation, dateUsedForStatistics);
 
         return observation;
     }
@@ -107,6 +109,10 @@ public class ObservationBuilder extends ResourceBuilder {
      */
     private static void addReferenceGuidelinesSirExtension(Observation observation, String referenceGuidelinesSir) {
         observation.addExtension(createStringExtension(referenceGuidelinesSir, "https://ecdc.amr/fhir/StructureDefinition/ObservationReferenceGuidelinesSIR"));
+    }
+
+    private static void addDateUsedForStatistics(Observation observation, String dateUsedForStatistics) {
+        observation.addExtension(createStringExtension(dateUsedForStatistics, "https://ecdc.amr/fhir/StructureDefinition/ObservationDateUsedForStatistics"));
     }
 
     /**
