@@ -54,13 +54,13 @@ public class ObservationBuilder extends ResourceBuilder {
         ZonedDateTime currentTime = ZonedDateTime.now();
         observation.setEffective(new DateTimeType(currentTime.toInstant().toString()));
 
-        // Experimentally use "issued" for statistics date
+        // Use "issued" for statistics date
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
         try {
             Date issuedDate = formatter.parse(dateUsedForStatistics);
             observation.setIssued(issuedDate);
         } catch (ParseException e) {
-            e.printStackTrace();
+            log.warn(e.toString());
         }
 
         // Add extensions
@@ -69,8 +69,6 @@ public class ObservationBuilder extends ResourceBuilder {
         addPatientTypeExtension(observation, patientType);
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
-        addDateUsedForStatistics(observation, dateUsedForStatistics);
-        addDateUsedForStatisticsDate(observation, dateUsedForStatistics);
 
         return observation;
     }
@@ -123,14 +121,6 @@ public class ObservationBuilder extends ResourceBuilder {
      */
     private static void addReferenceGuidelinesSirExtension(Observation observation, String referenceGuidelinesSir) {
         observation.addExtension(createStringExtension(referenceGuidelinesSir, "https://ecdc.amr/fhir/StructureDefinition/ObservationReferenceGuidelinesSIR"));
-    }
-
-    private static void addDateUsedForStatistics(Observation observation, String dateUsedForStatistics) {
-        observation.addExtension(createStringExtension(dateUsedForStatistics, "https://ecdc.amr/fhir/StructureDefinition/ObservationDateUsedForStatistics"));
-    }
-
-    private static void addDateUsedForStatisticsDate(Observation observation, String dateUsedForStatistics) {
-        observation.addExtension(createDateExtension(dateUsedForStatistics, "https://ecdc.amr/fhir/StructureDefinition/ObservationDateUsedForStatisticsDate"));
     }
 
     /**
