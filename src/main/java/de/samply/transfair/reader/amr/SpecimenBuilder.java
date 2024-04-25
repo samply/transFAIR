@@ -1,0 +1,35 @@
+package de.samply.transfair.reader.amr;
+
+import lombok.extern.slf4j.Slf4j;
+import org.hl7.fhir.r4.model.Specimen;
+import org.hl7.fhir.r4.model.Patient;
+
+import java.util.Map;
+
+/**
+ * This is a utility class for constructing FHIR Specimen resources and extensions
+ * from data extracted from an AMR CSV file.
+ */
+@Slf4j
+public class SpecimenBuilder extends ResourceBuilder {
+    /**
+     * Builds a FHIR Specimen resource using attributes extracted from the record.
+     *
+     * @param patient The associated Patient for the Specimen.
+     * @param record A map containing Specimen data, where keys represent data attributes.
+     * @return A constructed Specimen resource with populated properties and extensions.
+     */
+    public static Specimen buildSpecimen(Patient patient, Map<String, String> record) {
+        Specimen specimen = new Specimen();
+
+        // Extract Specimen data from the map
+        String isolateId = record.get("IsolateId");
+
+        specimen.setId(isolateId);
+
+        // Set properties of the Specimen
+        specimen.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
+
+        return specimen;
+    }
+}

@@ -23,8 +23,8 @@ public class ObservationBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR Observation resource using attributes extracted from the record.
      *
-     * @param recordCounter   A counter for the record, used in generating the Observation ID.
-     * @param patient         The associated Patient for the Observation.
+     * @param recordCounter A counter for the record, used in generating the Observation ID.
+     * @param patient The associated Patient for the Observation.
      * @param record A map containing observation data, where keys represent data attributes.
      * @return A constructed Observation resource with populated properties and extensions.
      */

@@ -4,12 +4,14 @@ import de.samply.transfair.reader.amr.CsvReader;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
 
+import de.samply.transfair.reader.amr.SpecimenBuilder;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
 
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.Specimen;
 import org.hl7.fhir.r4.model.Observation;
 
 import lombok.extern.slf4j.Slf4j;
@@ -64,11 +66,16 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       return null; // Terminate reading
 
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
+    Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
       Patient patient = patientMap.computeIfAbsent(record.get("PatientCounter"),
               key -> PatientBuilder.buildPatient(record));
+
+      // Create or retrieve the isolate
+      Specimen specimen = specimenMap.computeIfAbsent(record.get("IsolateId"),
+              key -> SpecimenBuilder.buildSpecimen(patient, record));
 
       // Create the observation
       Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record);
@@ -86,6 +93,13 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       Bundle.BundleEntryComponent patientEntry = new Bundle.BundleEntryComponent();
       patientEntry.setResource(patient);
       bundle.addEntry(patientEntry);
+    }
+
+    // Pack the Specimen resources into the Bundle
+    for (Specimen specimen: specimenMap.values()) {
+      Bundle.BundleEntryComponent specimenEntry = new Bundle.BundleEntryComponent();
+      specimenEntry.setResource(specimen);
+      bundle.addEntry(specimenEntry);
     }
 
     return bundle;
