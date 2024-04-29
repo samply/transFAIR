@@ -1,5 +1,6 @@
 package de.samply.transfair.reader.amr;
 
+import de.samply.transfair.util.HashUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.DateTimeType;
 import org.hl7.fhir.r4.model.Observation;
@@ -30,9 +31,6 @@ public class ObservationBuilder extends ResourceBuilder {
      */
     public static Observation buildObservation(int recordCounter, Patient patient, Map<String, String> record) {
         Observation observation = new Observation();
-
-        String patientId = patient.getIdElement().getValueAsString();
-        observation.setId(patientId + "." + recordCounter);
 
         // Extract observation data from the map
         String pathogen = record.get("Pathogen");
@@ -69,6 +67,12 @@ public class ObservationBuilder extends ResourceBuilder {
         addPatientTypeExtension(observation, patientType);
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
+
+        // Create an ID for the Observation as a hash of all the things just added
+        String patientId = patient.getIdElement().getValueAsString();
+        String id = patientId + "." + HashUtils.calculateHash(observation);
+        //log.info("buildObservation: id: " + id);
+        observation.setId(id);
 
         return observation;
     }
