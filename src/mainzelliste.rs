@@ -60,12 +60,15 @@ pub async fn create_project_pseudonym(
         .json(&identifier_request)
         .send()
         .await
-        .map_err(|err| 
-            (StatusCode::SERVICE_UNAVAILABLE, "Failed to communicate with mainzelliste: {}", err))
-            .unwrap();
+        .map_err(|err| {
+            warn!("Failed to communicate with mainzelliste: {}", err);
+            (StatusCode::SERVICE_UNAVAILABLE, "Failed to communicate with mainzelliste: {}", err)
+        }).unwrap();
     
-    let patient = response.json::<Patient>().await.map_err(|err| 
-        (StatusCode::INTERNAL_SERVER_ERROR, "Couldn't parse mainzelliste response as json: {}", err)).unwrap();
+    let patient = response.json::<Patient>().await.map_err(|err| {
+        warn!("Couldn't parse mainzelliste response as json: {}", err);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Couldn't parse mainzelliste response as json: {}", err)
+    }).unwrap();
     
     let patient_identifiers = patient.identifier.clone();
 
