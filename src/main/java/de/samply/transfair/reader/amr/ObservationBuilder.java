@@ -71,7 +71,7 @@ public class ObservationBuilder extends ResourceBuilder {
         // Create an ID for the Observation as a hash of all the things just added
         String patientId = patient.getIdElement().getValueAsString();
         String id = patientId + "." + HashUtils.calculateHash(observation);
-        //log.info("buildObservation: id: " + id);
+//        log.info("buildObservation: id: " + id);
         observation.setId(id);
 
         return observation;

@@ -54,52 +54,18 @@ public class FhirBundleWriter implements ItemWriter<Bundle> {
   }
 
   @Override
-//  public void write(Chunk<? extends Bundle> chunk) throws Exception {
-//
-//    var writtenBundles = bundlesWrittenTotal.incrementAndGet();
-//    Bundle bundle = chunk.getItems().get(0);
-//
-//    if (writeToFile){
-//      this.writeToFile(bundle, writtenBundles);
-//      return;
-//    }
-//
-//    var response = retryTemplate.execute((RetryCallback<Bundle, Exception>) context ->
-//    client.transaction().withBundle(bundle).execute());
-//  }
-
   public void write(Chunk<? extends Bundle> chunk) throws Exception {
+
     var writtenBundles = bundlesWrittenTotal.incrementAndGet();
     Bundle bundle = chunk.getItems().get(0);
-
-    if (bundle != null) {
-      log.info("write: bundle size: " + bundle.getEntry().size());
-    }
 
     if (writeToFile){
       this.writeToFile(bundle, writtenBundles);
       return;
     }
 
-    // Extract the RetryCallback into a separate method
-    RetryCallback<Bundle, Exception> retryCallback = context -> {
-      log.info("write.retryCallback: executing transaction with bundle");
-      return client.transaction().withBundle(bundle).execute();
-    };
-
-    log.info("write: start retrying the execute");
-
-    // Use a try-catch block to handle exceptions
-    try {
-      var response = retryTemplate.execute(retryCallback);
-      log.info("write: response: " + response);
-    } catch (Exception e) {
-      // Handle the exception
-      System.err.println("An error occurred during the retry operation: " + e.getMessage());
-      throw e; // Rethrow the exception if necessary
-    }
-
-    log.info("write: done");
+    var response = retryTemplate.execute((RetryCallback<Bundle, Exception>) context ->
+    client.transaction().withBundle(bundle).execute());
   }
 
   private void writeToFile(Bundle fhirBundle, int chunk) {
