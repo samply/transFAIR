@@ -9,6 +9,7 @@ use crate::requests::{create_data_request, list_data_requests, get_data_request}
 
 mod banner;
 mod config;
+mod fhir;
 mod requests;
 mod mainzelliste;
 

@@ -13,7 +13,7 @@ pub struct Config {
     pub institute_ttp_api_key: String,
     // NOTE: You can't pass multiple projects through environment, only through args like
     // cargo run -- --projects '<project_1>' '<project_2>'
-    #[clap(long, env, num_args = 1.., value_delimiter=';', required = true)]
+    #[clap(long, env, num_args = 1, value_delimiter=';', required = true)]
     pub projects: Vec<ProjectConfig>,
 }
 

@@ -6,13 +6,13 @@ use serde::{Serialize, Deserialize};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids};
+use crate::{fhir::post_consent, mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG};
 
 #[derive(Serialize)]
 pub enum RequestStatus {
     Created,
-    DataLoaded,
-    UpdateAvailable,
+    _DataLoaded,
+    _UpdateAvailable,
     Error,
 }
 
@@ -46,16 +46,19 @@ pub struct DataRequestPayload {
 
 // POST /requests; Creates a new Data Request
 pub async fn create_data_request(Json(payload): Json<DataRequestPayload>) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
-    validate_data_request(payload.patient.clone()).await?;
-    let data_request = DataRequest {
-      id: Uuid::new_v4(),
-      status: RequestStatus::Created,
-    };
+    // NOTE: For now we only allow one project, but will later add support for multiple projects
+    let project = &CONFIG.projects[0];
+    validate_data_request(payload.patient.clone()).await?; 
     let identifiers = create_project_pseudonym(payload.patient.clone()).await?;
     debug!("TTP Returned these identifiers {:#?}", identifiers);
     let consent = document_patient_consent(payload.consent, identifiers).await?;
     debug!("TTP returned this consent for Patient {:?}", consent);
-    Ok(Json(data_request))
+    let _consent_from_inbox = post_consent(&project.consent_fhir_url, consent).await?;
+    // TODO: store this for later processing
+    Ok(Json(DataRequest {
+      id: Uuid::new_v4(),
+      status: RequestStatus::Created,
+    }))
 }
 
 // GET /requests; Lists all running Data Requests
