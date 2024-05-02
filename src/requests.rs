@@ -1,11 +1,12 @@
 use axum::{extract::Path, Json};
 use chrono::NaiveDate;
+use fhir_sdk::r4b::resources::Consent;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::mainzelliste::{create_project_pseudonym, get_supported_ids};
+use crate::mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids};
 
 #[derive(Serialize)]
 pub enum RequestStatus {
@@ -37,15 +38,23 @@ pub struct Patient {
     pub identifiers: Vec<IdType>
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DataRequestPayload {
+    pub patient: Patient,
+    pub consent: Consent
+}
+
 // POST /requests; Creates a new Data Request
-pub async fn create_data_request(Json(patient): Json<Patient>) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
-    validate_data_request(patient.clone()).await?;
+pub async fn create_data_request(Json(payload): Json<DataRequestPayload>) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
+    validate_data_request(payload.patient.clone()).await?;
     let data_request = DataRequest {
       id: Uuid::new_v4(),
       status: RequestStatus::Created,
     };
-    let identifiers = create_project_pseudonym(patient.clone()).await?;
+    let identifiers = create_project_pseudonym(payload.patient.clone()).await?;
     debug!("TTP Returned these identifiers {:#?}", identifiers);
+    let consent = document_patient_consent(payload.consent, identifiers).await?;
+    debug!("TTP returned this consent for Patient {:?}", consent);
     Ok(Json(data_request))
 }
 
