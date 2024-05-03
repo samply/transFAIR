@@ -31,7 +31,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param record A map containing observation data, where keys represent data attributes.
      * @return A constructed Observation resource with populated properties and extensions.
      */
-    public static Observation buildObservation(int recordCounter, Patient patient, Map<String, String> record) {
+    public static Observation buildObservation(int recordCounter, Patient patient, Map<String, String> record, Map<String,String> observationIdMap) {
         Observation observation = new Observation();
 
         // Extract observation data from the map
@@ -45,6 +45,17 @@ public class ObservationBuilder extends ResourceBuilder {
         String reportingCountry = record.get("ReportingCountry"); attributes.add(reportingCountry);
         String referenceGuidelinesSir = record.get("ReferenceGuidelinesSIR"); attributes.add(referenceGuidelinesSir);
         String dateUsedForStatistics = record.get("DateUsedForStatistics"); attributes.add(dateUsedForStatistics);
+
+        // Create an ID for the Observation as a hash of all the attributes
+        String patientId = patient.getIdElement().getValueAsString();
+        String id = patientId + "." + HashUtils.generateHashFromStringList(attributes);
+        log.info("buildObservation: id: " + id);
+        // Don't store duplicated observations
+        if (observationIdMap.containsKey(id))
+            return null;
+        else
+            observationIdMap.put(id, id);
+        observation.setId(id);
 
         // Set properties of the Observation
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
@@ -70,13 +81,6 @@ public class ObservationBuilder extends ResourceBuilder {
         addPatientTypeExtension(observation, patientType);
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
-
-        // Create an ID for the Observation as a hash of all the things just added
-        String patientId = patient.getIdElement().getValueAsString();
-//        String id = patientId + "." + HashUtils.generateHashFromObject(observation);
-        String id = patientId + "." + HashUtils.generateHashFromStringList(attributes);
-        log.info("buildObservation: id: " + id);
-        observation.setId(id);
 
         return observation;
     }

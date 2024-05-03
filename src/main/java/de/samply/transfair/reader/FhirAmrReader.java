@@ -67,6 +67,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
     Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
+    Map<String,String> observationIdMap = new HashMap<String, String>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
@@ -78,14 +79,16 @@ public class FhirAmrReader implements ItemReader<Bundle> {
               key -> SpecimenBuilder.buildSpecimen(patient, record));
 
       // Create the observation
-      Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record);
+      Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record, observationIdMap);
+      recordCounter++;
+
+      if (observation == null)
+        continue;
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
       observationEntry.setResource(observation);
       bundle.addEntry(observationEntry);
-
-      recordCounter++;
     }
 
     // Pack the Patient resources into the Bundle
