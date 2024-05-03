@@ -6,6 +6,7 @@ import java.io.ObjectOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.List;
 
 public class HashUtils {
 /**
@@ -17,7 +18,7 @@ public class HashUtils {
  * @param obj The object to be hashed. Must not be null.
  * @return A string representation of the calculated hash.
 */
-public static String calculateHash(Object obj) {
+public static String generateHashFromObject(Object obj) {
         String returnVal = null;
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -35,5 +36,36 @@ public static String calculateHash(Object obj) {
         }
 
         return returnVal;
+    }
+
+    /**
+     * Generates a hash from a list of strings.
+     *
+     * @param strings A list of strings to be concatenated and hashed.
+     * @return A hexadecimal string representing the hash of the concatenated input strings.
+     */
+    public static String generateHashFromStringList(List<String> strings) {
+        try {
+//            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            MessageDigest md = MessageDigest.getInstance("MD2");
+            StringBuilder sb = new StringBuilder();
+            for (String s : strings) {
+                sb.append(s);
+            }
+            String input = sb.toString();
+            byte[] bytes = input.getBytes();
+            byte[] hashBytes = md.digest(bytes);
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xFF & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

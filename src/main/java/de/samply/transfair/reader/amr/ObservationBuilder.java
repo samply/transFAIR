@@ -10,9 +10,11 @@ import org.hl7.fhir.r4.model.Coding;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,15 +35,16 @@ public class ObservationBuilder extends ResourceBuilder {
         Observation observation = new Observation();
 
         // Extract observation data from the map
-        String pathogen = record.get("Pathogen");
-        String antibiotic = record.get("Antibiotic");
-        String sir = record.get("SIR");
-        String isolateId = record.get("IsolateId");
-        String dataSource = record.get("DataSource");
-        String patientType = record.get("PatientType");
-        String reportingCountry = record.get("ReportingCountry");
-        String referenceGuidelinesSir = record.get("ReferenceGuidelinesSIR");
-        String dateUsedForStatistics = record.get("DateUsedForStatistics");
+        List<String> attributes = new ArrayList<String>();
+        String pathogen = record.get("Pathogen"); attributes.add(pathogen);
+        String antibiotic = record.get("Antibiotic"); attributes.add(antibiotic);
+        String sir = record.get("SIR"); attributes.add(sir);
+        String isolateId = record.get("IsolateId"); attributes.add(isolateId);
+        String dataSource = record.get("DataSource"); attributes.add(dataSource);
+        String patientType = record.get("PatientType"); attributes.add(patientType);
+        String reportingCountry = record.get("ReportingCountry"); attributes.add(reportingCountry);
+        String referenceGuidelinesSir = record.get("ReferenceGuidelinesSIR"); attributes.add(referenceGuidelinesSir);
+        String dateUsedForStatistics = record.get("DateUsedForStatistics"); attributes.add(dateUsedForStatistics);
 
         // Set properties of the Observation
         observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
@@ -70,8 +73,9 @@ public class ObservationBuilder extends ResourceBuilder {
 
         // Create an ID for the Observation as a hash of all the things just added
         String patientId = patient.getIdElement().getValueAsString();
-        String id = patientId + "." + HashUtils.calculateHash(observation);
-//        log.info("buildObservation: id: " + id);
+//        String id = patientId + "." + HashUtils.generateHashFromObject(observation);
+        String id = patientId + "." + HashUtils.generateHashFromStringList(attributes);
+        log.info("buildObservation: id: " + id);
         observation.setId(id);
 
         return observation;
