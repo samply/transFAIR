@@ -1,11 +1,9 @@
-use axum::{routing::{get, post}, Error, Router};
+use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::{Config, ProjectConfig};
 use fhir::get_mdat_as_bundle;
-use fhir_sdk::r4b::resources::Bundle;
 use once_cell::sync::Lazy;
-use reqwest::StatusCode;
 use tracing::{debug, error, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
