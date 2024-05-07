@@ -2,7 +2,7 @@ use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::{Config, ProjectConfig};
-use fhir::get_mdat_as_bundle;
+use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
 use once_cell::sync::Lazy;
 use tracing::{debug, error, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -29,11 +29,11 @@ async fn main() {
     debug!("{:#?}", Lazy::force(&CONFIG));
 
     tokio::spawn(async move {
-        if let Err(e) = fetch_project_data(&CONFIG.projects).await {
+        if let Err(e) = process_data_requests(&CONFIG.projects).await {
             warn!("Failed to fetch project data: {e}. Will try again later");
         }
         loop {
-            if let Err(e) = fetch_project_data(&CONFIG.projects).await {
+            if let Err(e) = process_data_requests(&CONFIG.projects).await {
                 warn!("Failed to fetch project data: {e}. Will try again later");
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(60*60)).await;
@@ -55,23 +55,29 @@ async fn main() {
         .unwrap();
 }
 
-async fn fetch_project_data(projects: &Vec<ProjectConfig>) -> Result<(), String> {
+async fn process_data_requests(projects: &Vec<ProjectConfig>) -> Result<(), String> {
     let query_from_date = chrono::prelude::Utc::now() - Duration::days(1);
-
-    // NOTE: can't get type annotation to work here
     let project_data: Vec<_> = projects.iter().map(|project| {
-        get_mdat_as_bundle(project.mdat_fhir_url.clone(), query_from_date.naive_local().into())
+        (
+            project, 
+            get_mdat_as_bundle(
+                project.mdat_fhir_url.clone(), 
+                query_from_date.naive_local().into()
+            )
+        )
     }).collect();
     for data in project_data {
-        let result = data.await.map_err(|err| {
+        let result = data.1.await.map_err(|err| {
             // TODO: write down error and safe it to corresponding data request
-            error!("Unable to parse bundle returned by mdat server: {}", err);
+            error!("Unable to parse bundle returned by mdat server ({}): {}", data.0.mdat_fhir_url, err);
             err
         }).unwrap();
         if result.entry.is_empty() {
-            debug!("Received empty bundle. No update necessary");
+            debug!("Received empty bundle from mdat server ({}). No update necessary", data.0.mdat_fhir_url);
+        } else {
+            let response = put_mdat_as_bundle(data.0.project_fhir_url.clone(), result);
+            // TODO: error handling
         }
-        // TODO: Send Data to Project Server
     }
     Ok(())
 }

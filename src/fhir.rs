@@ -43,7 +43,6 @@ pub async fn get_mdat_as_bundle(fhir_endpoint: String, last_update: NaiveDate) -
     ];
     reqwest::Client::new()
         .get(bundle_endpoint)
-        // TODO: Find out why this is not working
         .query(&query)
         .send()
         .await
@@ -58,4 +57,20 @@ pub async fn get_mdat_as_bundle(fhir_endpoint: String, last_update: NaiveDate) -
             error!("Unable to parse bundle returned from mdat server: {}", err);
             format!("Unable to parse bundle returned from mdat server")
         })
+}
+
+pub async fn put_mdat_as_bundle(fhir_endpoint: String, bundle: Bundle) -> reqwest::Response {
+    let bundle_endpoint = format!("{}/fhir", fhir_endpoint);
+    debug!("Pushing data to project database: {}", bundle_endpoint);
+    reqwest::Client::new()
+        .post(bundle_endpoint)
+        .json(&bundle)
+        .send()
+        .await
+        .map_err(|err| {
+            let error_message = format!("Unable to post project data to mdat server: {}", err);
+            error!(error_message);
+            error_message
+        })
+        .unwrap()
 }
