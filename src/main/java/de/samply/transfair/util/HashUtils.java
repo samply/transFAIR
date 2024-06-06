@@ -8,6 +8,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
 
+/**
+ * This class provides utility methods for generating hash values from objects or lists of strings.
+ */
 public class HashUtils {
 /**
  * Calculates a hash value for the given object using MD2 algorithm and encodes it in a format suitable for use as an ID.
