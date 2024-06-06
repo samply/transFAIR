@@ -49,7 +49,6 @@ public static String generateHashFromObject(Object obj) {
      */
     public static String generateHashFromStringList(List<String> strings) {
         try {
-//            MessageDigest md = MessageDigest.getInstance("SHA-256");
             MessageDigest md = MessageDigest.getInstance("MD2");
             StringBuilder sb = new StringBuilder();
             for (String s : strings) {

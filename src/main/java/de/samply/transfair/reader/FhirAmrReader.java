@@ -3,7 +3,7 @@ package de.samply.transfair.reader;
 import de.samply.transfair.reader.amr.CsvReader;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
-
+import de.samply.transfair.reader.amr.LaboratoryBuilder;
 import de.samply.transfair.reader.amr.SpecimenBuilder;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +13,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Specimen;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Organization;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -68,6 +69,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
     Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
     Map<String,String> observationIdMap = new HashMap<String, String>();
+    Map<String, Organization> laboratoryMap = new HashMap<String, Organization>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
@@ -84,6 +86,10 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
       if (observation == null)
         continue;
+
+      // Create or retrieve the laboratory
+      Organization laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
+              key -> LaboratoryBuilder.buildLaboratory(observation, record));
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
@@ -103,6 +109,13 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       Bundle.BundleEntryComponent specimenEntry = new Bundle.BundleEntryComponent();
       specimenEntry.setResource(specimen);
       bundle.addEntry(specimenEntry);
+    }
+
+    // Pack the laboratory resources into the Bundle
+    for (Organization laboratory: laboratoryMap.values()) {
+      Bundle.BundleEntryComponent laboratoryEntry = new Bundle.BundleEntryComponent();
+      laboratoryEntry.setResource(laboratory);
+      bundle.addEntry(laboratoryEntry);
     }
 
     return bundle;
