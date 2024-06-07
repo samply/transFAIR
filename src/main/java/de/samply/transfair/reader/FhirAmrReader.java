@@ -113,6 +113,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
     // Pack the laboratory resources into the Bundle
     for (Organization laboratory: laboratoryMap.values()) {
+      log.info("laboratory: " + laboratory.getIdElement().getIdPart());
       Bundle.BundleEntryComponent laboratoryEntry = new Bundle.BundleEntryComponent();
       laboratoryEntry.setResource(laboratory);
       bundle.addEntry(laboratoryEntry);
