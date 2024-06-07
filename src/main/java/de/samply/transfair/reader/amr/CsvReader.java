@@ -1,5 +1,6 @@
 package de.samply.transfair.reader.amr;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -16,6 +17,7 @@ import java.util.Map;
 /**
  * CsvReader is a utility class for reading data from CSV files into lists of maps.
  */
+@Slf4j
 public class CsvReader {
     /**
      * Reads all CSV files in the specified directory and its subdirectories, and returns a list of records.
@@ -63,6 +65,7 @@ public class CsvReader {
 
         try (Reader reader = new FileReader(file);
              CSVParser csvParser = CSVFormat.DEFAULT.withHeader().parse(reader)) {
+            log.info("Reading CSV file: " + file.getName());
 
             for (CSVRecord record : csvParser) {
                 Map<String, String> recordMap = new HashMap<>();
