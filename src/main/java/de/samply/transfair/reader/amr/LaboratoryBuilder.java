@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Organization;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 
 import java.util.Map;
 
@@ -27,6 +29,22 @@ public class LaboratoryBuilder extends ResourceBuilder {
         String laboratoryCode = record.get("LaboratoryCode");
 
         organization.setId(laboratoryCode);
+        organization.setName("Laboratory " + laboratoryCode);
+
+        // Create a CodeableConcept for the type
+        CodeableConcept type = new CodeableConcept();
+
+        // Add coding for HL7 organization type
+        type.addCoding(new Coding()
+                .setSystem("http://terminology.hl7.org/CodeSystem/organization-type")
+                .setCode("prov")
+                .setDisplay("Healthcare Provider"));
+
+        // Set the text
+        type.setText("Diagnostic Laboratory");
+
+        // Add the type to the organization
+        organization.addType(type);
 
         // Set the performer attribute of the Observation resource
         observation.addPerformer(new Reference("Organization/" + laboratoryCode));
