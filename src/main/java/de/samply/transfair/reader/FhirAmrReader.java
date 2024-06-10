@@ -89,7 +89,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
       // Create or retrieve the laboratory
       Organization laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
-              key -> LaboratoryBuilder.buildLaboratory(observation, record));
+              key -> LaboratoryBuilder.buildLaboratory(patient, observation, record));
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();

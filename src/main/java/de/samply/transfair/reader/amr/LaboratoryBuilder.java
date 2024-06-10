@@ -3,6 +3,7 @@ package de.samply.transfair.reader.amr;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Organization;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
@@ -18,11 +19,12 @@ public class LaboratoryBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR Organization resource using attributes extracted from the record.
      *
+     * @param patient
      * @param observation The associated Observation for the laboratory.
      * @param record A map containing data, where keys represent data attributes.
      * @return A constructed Organization resource with populated properties and extensions.
      */
-    public static Organization buildLaboratory(Observation observation, Map<String, String> record) {
+    public static Organization buildLaboratory(Patient patient, Observation observation, Map<String, String> record) {
         Organization organization = new Organization();
 
         // Extract laboratory data from the map
@@ -41,13 +43,23 @@ public class LaboratoryBuilder extends ResourceBuilder {
                 .setDisplay("Healthcare Provider"));
 
         // Set the text
-        type.setText("Diagnostic Laboratory");
+        type.setText("Laboratory");
 
         // Add the type to the organization
         organization.addType(type);
 
         // Set the performer attribute of the Observation resource
         observation.addPerformer(new Reference("Organization/" + laboratoryCode));
+
+        // Create a Reference to the Patient resource
+        Reference patientReference = new Reference("Patient/" + patient.getIdElement().getIdPart());
+        // Add the reference to a custom extension in the Organization resource
+        organization.addExtension()
+                .setUrl("http://ecdc.eu/fhir/StructureDefinition/related-patient")
+                .setValue(patientReference);
+        // Alternatively, you could use a specific field in the Organization resource if appropriate
+        // For example, if there's a field you want to repurpose:
+        // organization.setManagingOrganization(patientReference);
 
         return organization;
     }
