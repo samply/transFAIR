@@ -13,7 +13,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Specimen;
 import org.hl7.fhir.r4.model.Observation;
-import org.hl7.fhir.r4.model.Organization;
+import org.hl7.fhir.r4.model.CareTeam;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -69,7 +69,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     Map<String, Patient> patientMap = new HashMap<String, Patient>();
     Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
     Map<String,String> observationIdMap = new HashMap<String, String>();
-    Map<String, Organization> laboratoryMap = new HashMap<String, Organization>();
+    Map<String, CareTeam> laboratoryMap = new HashMap<String, CareTeam>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
@@ -88,7 +88,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
         continue;
 
       // Create or retrieve the laboratory
-      Organization laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
+      CareTeam laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
               key -> LaboratoryBuilder.buildLaboratory(patient, observation, record));
 
       // Pack the Observation into the Bundle
@@ -112,7 +112,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     }
 
     // Pack the laboratory resources into the Bundle
-    for (Organization laboratory: laboratoryMap.values()) {
+    for (CareTeam laboratory: laboratoryMap.values()) {
       log.info("laboratory: " + laboratory.getIdElement().getIdPart());
       Bundle.BundleEntryComponent laboratoryEntry = new Bundle.BundleEntryComponent();
       laboratoryEntry.setResource(laboratory);
