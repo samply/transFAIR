@@ -7,6 +7,7 @@ import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Reference;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -59,6 +60,8 @@ public class ObservationBuilder extends ResourceBuilder {
 
         // Set properties of the Observation
 //        observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
+        observation.getEncounter().setReference("Patient/" + patient.getIdElement().getIdPart()); // TODO: Is this needed?
+        observation.getPartOf().add(new Reference("Patient/" + patient.getIdElement().getIdPart())); // TODO: Is this needed?
         observation.setCode(new CodeableConcept().setText("Antibiotic Resistance"));
         observation.setValue(constructObjectValueCodeableConcept(pathogen, antibiotic, sir));
 
