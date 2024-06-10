@@ -57,9 +57,8 @@ public class LaboratoryBuilder extends ResourceBuilder {
         organization.addExtension()
                 .setUrl("http://ecdc.eu/fhir/StructureDefinition/related-patient")
                 .setValue(patientReference);
-        // Alternatively, you could use a specific field in the Organization resource if appropriate
-        // For example, if there's a field you want to repurpose:
-        // organization.setManagingOrganization(patientReference);
+        // Repurposing "partOf" to link the organization to the patient resource:
+        organization.getPartOf().setReference("Patient/" + patient.getIdElement().getIdPart());
 
         return organization;
     }
