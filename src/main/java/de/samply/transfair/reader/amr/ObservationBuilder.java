@@ -58,7 +58,7 @@ public class ObservationBuilder extends ResourceBuilder {
         observation.setId(id);
 
         // Set properties of the Observation
-        observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
+//        observation.getSubject().setReference("Patient/" + patient.getIdElement().getIdPart());
         observation.setCode(new CodeableConcept().setText("Antibiotic Resistance"));
         observation.setValue(constructObjectValueCodeableConcept(pathogen, antibiotic, sir));
 
