@@ -30,6 +30,7 @@ TransFAIR is shipped with so-called ETL profiles. Currently, these are:
 - `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset).
 - `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/façade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead.
 - `dicom2fhir` - load data from a DICOM source, transform into ImagingStudy resources and load into a target FHIR store.
+- `amr` - load data from AMR (ECDC antimicrobial resistance) CSV files, transform into Patient and Observation resources and load into a target FHIR store.
 
 ## Configuration
 
@@ -43,6 +44,7 @@ TransFAIR is configured using environment variables:
 | `IMGMETA_FROM_FHIR`                       | Get DICOM metadata from the `SOURCE` datastore                             | true                       |                                                       |                              |
 | `IMGMETA_DICOM_WEB_URL`                   | Get DICOM metadata from the specified DICOM web URL                        |                            |                                                       |                              |
 | `IMGMETA_DICOM_FILE_PATH`                 | Get DICOM metadata from the specified DICOM file or directory              |                            |                                                       |                              |
+| `AMR_FILE_PATH`                           | Get AMR data from the specified directory                                  |                            |                                                       |                              |
 
 
 ## Setup a Development Environment
