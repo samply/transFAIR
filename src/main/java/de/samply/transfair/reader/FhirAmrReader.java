@@ -4,6 +4,7 @@ import de.samply.transfair.reader.amr.CsvReader;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
 import de.samply.transfair.reader.amr.LaboratoryBuilder;
+import de.samply.transfair.reader.amr.HospitalBuilder;
 import de.samply.transfair.reader.amr.SpecimenBuilder;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,6 +71,7 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
     Map<String,String> observationIdMap = new HashMap<String, String>();
     Map<String, CareTeam> laboratoryMap = new HashMap<String, CareTeam>();
+    Map<String, CareTeam> hospitalMap = new HashMap<String, CareTeam>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
@@ -90,6 +92,10 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       // Create or retrieve the laboratory
       CareTeam laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
               key -> LaboratoryBuilder.buildLaboratory(patient, record));
+
+      // Create or retrieve the hospital
+      CareTeam hospital = hospitalMap.computeIfAbsent(record.get("HospitalId"),
+              key -> HospitalBuilder.buildHospital(patient, record));
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
@@ -117,6 +123,14 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       Bundle.BundleEntryComponent laboratoryEntry = new Bundle.BundleEntryComponent();
       laboratoryEntry.setResource(laboratory);
       bundle.addEntry(laboratoryEntry);
+    }
+
+    // Pack the hospital resources into the Bundle
+    for (CareTeam hospital: hospitalMap.values()) {
+      log.info("hospital: " + hospital.getIdElement().getIdPart());
+      Bundle.BundleEntryComponent hospitalEntry = new Bundle.BundleEntryComponent();
+      hospitalEntry.setResource(hospital);
+      bundle.addEntry(hospitalEntry);
     }
 
     return bundle;
