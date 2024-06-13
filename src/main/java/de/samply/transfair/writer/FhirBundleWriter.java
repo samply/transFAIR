@@ -40,7 +40,8 @@ public class FhirBundleWriter implements ItemWriter<Bundle> {
     var backOffPolicy = new FixedBackOffPolicy();
     backOffPolicy.setBackOffPeriod(10000);
     var retryPolicy = new SimpleRetryPolicy();
-    retryPolicy.setMaxAttempts(10);
+//    retryPolicy.setMaxAttempts(10);
+    retryPolicy.setMaxAttempts(1);
 
     retryTemplate.setBackOffPolicy(backOffPolicy);
     retryTemplate.setRetryPolicy(retryPolicy);
