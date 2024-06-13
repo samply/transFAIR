@@ -19,7 +19,7 @@ public class SpecimenBuilder extends ResourceBuilder {
      * @param record A map containing Specimen data, where keys represent data attributes.
      * @return A constructed Specimen resource with populated properties and extensions.
      */
-    public static Specimen buildSpecimen(Patient patient, Map<String, String> record) {
+    public static Specimen build(Patient patient, Map<String, String> record) {
         Specimen specimen = new Specimen();
 
         // Extract Specimen data from the map

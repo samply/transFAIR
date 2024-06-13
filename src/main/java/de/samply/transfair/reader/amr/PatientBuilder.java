@@ -17,7 +17,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param record A map containing patient data, where keys represent data attributes.
      * @return A constructed Patient resource with populated properties and extensions.
      */
-    public static Patient buildPatient(Map<String, String> record) {
+    public static Patient build(Map<String, String> record) {
         Patient patient = new Patient();
 
         // Extract patient data from the map and set properties

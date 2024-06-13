@@ -5,6 +5,7 @@ import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
 import de.samply.transfair.reader.amr.LaboratoryBuilder;
 import de.samply.transfair.reader.amr.HospitalBuilder;
+import de.samply.transfair.reader.amr.RefguideBuilder;
 import de.samply.transfair.reader.amr.SpecimenBuilder;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,18 +73,19 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     Map<String,String> observationIdMap = new HashMap<String, String>();
     Map<String, CareTeam> laboratoryMap = new HashMap<String, CareTeam>();
     Map<String, CareTeam> hospitalMap = new HashMap<String, CareTeam>();
+    Map<String, CareTeam> refguideMap = new HashMap<String, CareTeam>();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       // Create or retrieve the patient
       Patient patient = patientMap.computeIfAbsent(record.get("PatientCounter"),
-              key -> PatientBuilder.buildPatient(record));
+              key -> PatientBuilder.build(record));
 
       // Create or retrieve the isolate
       Specimen specimen = specimenMap.computeIfAbsent(record.get("IsolateId"),
-              key -> SpecimenBuilder.buildSpecimen(patient, record));
+              key -> SpecimenBuilder.build(patient, record));
 
       // Create the observation
-      Observation observation = ObservationBuilder.buildObservation(recordCounter, patient, record, observationIdMap);
+      Observation observation = ObservationBuilder.build(recordCounter, patient, record, observationIdMap);
       recordCounter++;
 
       if (observation == null)
@@ -91,11 +93,15 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
       // Create or retrieve the laboratory
       CareTeam laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
-              key -> LaboratoryBuilder.buildLaboratory(patient, record));
+              key -> LaboratoryBuilder.build(patient, record));
 
       // Create or retrieve the hospital
       CareTeam hospital = hospitalMap.computeIfAbsent(record.get("HospitalId"),
-              key -> HospitalBuilder.buildHospital(patient, record));
+              key -> HospitalBuilder.build(patient, record));
+
+      // Create or retrieve the reference guideline
+      CareTeam refguide = refguideMap.computeIfAbsent(record.get("ReferenceGuidelinesSIR"),
+              key -> RefguideBuilder.build(patient, record));
 
       // Pack the Observation into the Bundle
       Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
@@ -131,6 +137,14 @@ public class FhirAmrReader implements ItemReader<Bundle> {
       Bundle.BundleEntryComponent hospitalEntry = new Bundle.BundleEntryComponent();
       hospitalEntry.setResource(hospital);
       bundle.addEntry(hospitalEntry);
+    }
+
+    // Pack the reference guideline resources into the Bundle
+    for (CareTeam refguide: refguideMap.values()) {
+      log.info("refguide: " + refguide.getIdElement().getIdPart());
+      Bundle.BundleEntryComponent refguideEntry = new Bundle.BundleEntryComponent();
+      refguideEntry.setResource(refguide);
+      bundle.addEntry(refguideEntry);
     }
 
     return bundle;

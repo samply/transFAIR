@@ -25,18 +25,7 @@ public class HospitalBuilder extends ResourceBuilder {
      * @param record A map containing data, where keys represent data attributes.
      * @return A constructed CareTeam resource with populated properties and extensions.
      */
-    public static CareTeam buildHospital(Patient patient, Map<String, String> record) {
-        CareTeam hospital = new CareTeam();
-
-        // Extract hospital data from the map
-        String hospitalCode = record.get("HospitalId");
-
-        hospital.setId(hospitalCode);
-        hospital.setName("Hospital " + hospitalCode);
-
-        // Set the patient as the subject. Needed for population estimation.
-        hospital.setSubject(new Reference("Patient/" + patient.getIdElement().getIdPart()));
-
-        return hospital;
+    public static CareTeam build(Patient patient, Map<String, String> record) {
+        return CareTeamBuilder.build(patient, record.get("HospitalId"), "Hospital");
     }
 }

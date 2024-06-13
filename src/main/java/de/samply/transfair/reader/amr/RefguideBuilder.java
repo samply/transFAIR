@@ -11,11 +11,11 @@ import org.hl7.fhir.r4.model.Coding;
 import java.util.Map;
 
 /**
- * This is a utility class for constructing FHIR CareTeam (Laboratory) resources and extensions
+ * This is a utility class for constructing FHIR CareTeam (Refguide) resources and extensions
  * from data extracted from an AMR CSV file.
  */
 @Slf4j
-public class LaboratoryBuilder extends ResourceBuilder {
+public class RefguideBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR CareTeam resource using attributes extracted from the record.
      * We are using this resource because it posesses a "subject" attribute and this
@@ -26,6 +26,6 @@ public class LaboratoryBuilder extends ResourceBuilder {
      * @return A constructed CareTeam resource with populated properties and extensions.
      */
     public static CareTeam build(Patient patient, Map<String, String> record) {
-        return CareTeamBuilder.build(patient, record.get("LaboratoryCode"), "Laboratory");
+        return CareTeamBuilder.build(patient, record.get("ReferenceGuidelinesSIR"), "Refguide");
     }
 }

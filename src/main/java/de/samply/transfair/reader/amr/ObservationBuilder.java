@@ -32,7 +32,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param record A map containing observation data, where keys represent data attributes.
      * @return A constructed Observation resource with populated properties and extensions.
      */
-    public static Observation buildObservation(int recordCounter, Patient patient, Map<String, String> record, Map<String,String> observationIdMap) {
+    public static Observation build(int recordCounter, Patient patient, Map<String, String> record, Map<String,String> observationIdMap) {
         Observation observation = new Observation();
 
         // Extract observation data from the map
