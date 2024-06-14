@@ -17,7 +17,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param record A map containing patient data, where keys represent data attributes.
      * @return A constructed Patient resource with populated properties and extensions.
      */
-    public static Patient build(Map<String, String> record) {
+    public Patient build(Map<String, String> record) {
         Patient patient = new Patient();
 
         // Extract patient data from the map and set properties
@@ -39,6 +39,8 @@ public class PatientBuilder extends ResourceBuilder {
         addHospitalIdExtension(patient, hospitalId);
         addHospitalUnitTypeExtension(patient, hospitalUnitType);
 
+        resourceMap.put(patientCounter, patient);
+
         return patient;
     }
 
@@ -48,7 +50,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param genderValue The string representation of gender.
      * @return The corresponding AdministrativeGender enum value.
      */
-    private static AdministrativeGender mapStringToAdministrativeGender(String genderValue) {
+    private AdministrativeGender mapStringToAdministrativeGender(String genderValue) {
         switch (genderValue.toUpperCase()) {
             case "M":
                 return AdministrativeGender.MALE;
@@ -69,7 +71,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param patient The Patient resource to which the extension will be added.
      * @param age     The age value to be added to the extension.
      */
-    private static void addAgeExtension(Patient patient, String age) {
+    private void addAgeExtension(Patient patient, String age) {
         patient.addExtension(createStringExtension(age, "https://ecdc.amr/fhir/StructureDefinition/PatientAge"));
     }
 
@@ -79,7 +81,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param patient        The Patient resource to which the extension will be added.
      * @param laboratoryCode The laboratory code value to be added to the extension.
      */
-    private static void addLaboratoryCodeExtension(Patient patient, String laboratoryCode) {
+    private void addLaboratoryCodeExtension(Patient patient, String laboratoryCode) {
         patient.addExtension(createStringExtension(laboratoryCode, "https://ecdc.amr/fhir/StructureDefinition/PatientLaboratoryCode"));
     }
 
@@ -89,7 +91,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param patient  The Patient resource to which the extension will be added.
      * @param hospitalId The hospital ID value to be added to the extension.
      */
-    private static void addHospitalIdExtension(Patient patient, String hospitalId) {
+    private void addHospitalIdExtension(Patient patient, String hospitalId) {
         patient.addExtension(createStringExtension(hospitalId, "https://ecdc.amr/fhir/StructureDefinition/PatientHospitalId"));
     }
 
@@ -99,7 +101,7 @@ public class PatientBuilder extends ResourceBuilder {
      * @param patient        The Patient resource to which the extension will be added.
      * @param hospitalUnitType The hospital unit type value to be added to the extension.
      */
-    private static void addHospitalUnitTypeExtension(Patient patient, String hospitalUnitType) {
+    private void addHospitalUnitTypeExtension(Patient patient, String hospitalUnitType) {
         patient.addExtension(createStringExtension(hospitalUnitType, "https://ecdc.amr/fhir/StructureDefinition/PatientHospitalUnitType"));
     }
 }

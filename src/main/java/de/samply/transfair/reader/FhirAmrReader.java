@@ -13,14 +13,11 @@ import org.springframework.beans.factory.annotation.Value;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
-import org.hl7.fhir.r4.model.Specimen;
 import org.hl7.fhir.r4.model.Observation;
-import org.hl7.fhir.r4.model.CareTeam;
 
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * FhirAmrReader reads data from an AMR source and generates FHIR resources.
@@ -68,84 +65,36 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     else
       return null; // Terminate reading
 
-    Map<String, Patient> patientMap = new HashMap<String, Patient>();
-    Map<String, Specimen> specimenMap = new HashMap<String, Specimen>();
-    Map<String,String> observationIdMap = new HashMap<String, String>();
-    Map<String, CareTeam> laboratoryMap = new HashMap<String, CareTeam>();
-    Map<String, CareTeam> hospitalMap = new HashMap<String, CareTeam>();
-    Map<String, CareTeam> refguideMap = new HashMap<String, CareTeam>();
+    PatientBuilder patientBuilder = new PatientBuilder();
+    SpecimenBuilder specimenBuilder = new SpecimenBuilder();
+    ObservationBuilder observationBuilder = new ObservationBuilder();
+    LaboratoryBuilder laboratoryBuilder = new LaboratoryBuilder();
+    HospitalBuilder hospitalBuilder = new HospitalBuilder();
+    RefguideBuilder refguideBuilder = new RefguideBuilder();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
-      // Create or retrieve the patient
-      Patient patient = patientMap.computeIfAbsent(record.get("PatientCounter"),
-              key -> PatientBuilder.build(record));
-
-      // Create or retrieve the isolate
-      Specimen specimen = specimenMap.computeIfAbsent(record.get("IsolateId"),
-              key -> SpecimenBuilder.build(patient, record));
+      Patient patient = patientBuilder.build(record);
+      specimenBuilder.build(patient, record);
 
       // Create the observation
-      Observation observation = ObservationBuilder.build(recordCounter, patient, record, observationIdMap);
+      Observation observation = observationBuilder.build(recordCounter, patient, record);
       recordCounter++;
 
+      // Skip if this observation is a duplicate
       if (observation == null)
         continue;
 
-      // Create or retrieve the laboratory
-      CareTeam laboratory = laboratoryMap.computeIfAbsent(record.get("LaboratoryCode"),
-              key -> LaboratoryBuilder.build(patient, record));
-
-      // Create or retrieve the hospital
-      CareTeam hospital = hospitalMap.computeIfAbsent(record.get("HospitalId"),
-              key -> HospitalBuilder.build(patient, record));
-
-      // Create or retrieve the reference guideline
-      CareTeam refguide = refguideMap.computeIfAbsent(record.get("ReferenceGuidelinesSIR"),
-              key -> RefguideBuilder.build(patient, record));
-
-      // Pack the Observation into the Bundle
-      Bundle.BundleEntryComponent observationEntry = new Bundle.BundleEntryComponent();
-      observationEntry.setResource(observation);
-      bundle.addEntry(observationEntry);
+      laboratoryBuilder.build(patient, record);
+      hospitalBuilder.build(patient, record);
+      refguideBuilder.build(patient, record);
     }
 
-    // Pack the Patient resources into the Bundle
-    for (Patient patient: patientMap.values()) {
-      Bundle.BundleEntryComponent patientEntry = new Bundle.BundleEntryComponent();
-      patientEntry.setResource(patient);
-      bundle.addEntry(patientEntry);
-    }
-
-    // Pack the Specimen resources into the Bundle
-    for (Specimen specimen: specimenMap.values()) {
-      Bundle.BundleEntryComponent specimenEntry = new Bundle.BundleEntryComponent();
-      specimenEntry.setResource(specimen);
-      bundle.addEntry(specimenEntry);
-    }
-
-    // Pack the laboratory resources into the Bundle
-    for (CareTeam laboratory: laboratoryMap.values()) {
-      log.info("laboratory: " + laboratory.getIdElement().getIdPart());
-      Bundle.BundleEntryComponent laboratoryEntry = new Bundle.BundleEntryComponent();
-      laboratoryEntry.setResource(laboratory);
-      bundle.addEntry(laboratoryEntry);
-    }
-
-    // Pack the hospital resources into the Bundle
-    for (CareTeam hospital: hospitalMap.values()) {
-      log.info("hospital: " + hospital.getIdElement().getIdPart());
-      Bundle.BundleEntryComponent hospitalEntry = new Bundle.BundleEntryComponent();
-      hospitalEntry.setResource(hospital);
-      bundle.addEntry(hospitalEntry);
-    }
-
-    // Pack the reference guideline resources into the Bundle
-    for (CareTeam refguide: refguideMap.values()) {
-      log.info("refguide: " + refguide.getIdElement().getIdPart());
-      Bundle.BundleEntryComponent refguideEntry = new Bundle.BundleEntryComponent();
-      refguideEntry.setResource(refguide);
-      bundle.addEntry(refguideEntry);
-    }
+    observationBuilder.addResourcesToBundle(bundle);
+    patientBuilder.addResourcesToBundle(bundle);
+    specimenBuilder.addResourcesToBundle(bundle);
+    laboratoryBuilder.addResourcesToBundle(bundle);
+    hospitalBuilder.addResourcesToBundle(bundle);
+    refguideBuilder.addResourcesToBundle(bundle);
 
     return bundle;
   }

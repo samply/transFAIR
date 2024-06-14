@@ -1,13 +1,13 @@
 package de.samply.transfair.reader.amr;
 
 import lombok.extern.slf4j.Slf4j;
+import org.hl7.fhir.r4.model.Resource;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.CareTeam;
-import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Reference;
-import org.hl7.fhir.r4.model.CodeableConcept;
-import org.hl7.fhir.r4.model.Coding;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -19,15 +19,34 @@ import java.util.Map;
  */
 @Slf4j
 public class CareTeamBuilder extends ResourceBuilder {
-    public static CareTeam build(Patient patient, String id, String nameStartingString) {
-        CareTeam careTeam = new CareTeam();
+    protected String nameStartingString;
 
-        careTeam.setId(id);
-        careTeam.setName(nameStartingString + " " + id);
+    /**
+     * Builds a FHIR CareTeam resource using attributes extracted from the record.
+     * We are using this resource because it posesses a "subject" attribute and this
+     * is needed for population estimation.
+     *
+     * @param patient
+     * @param record A map containing data, where keys represent data attributes.
+     * @return A constructed CareTeam resource with populated properties and extensions.
+     */
+    public void build(Patient patient, Map<String, String> record) {
+        String id = generateResourceId(patient, record);
+        if (resourceMap.containsKey(id))
+            return;
+
+        CareTeam resource = new CareTeam();
+        resource.setId(id);
+        resource.setName(nameStartingString + " " + id);
 
         // Set the patient as the subject. Needed for population estimation.
-        careTeam.setSubject(new Reference("Patient/" + patient.getIdElement().getIdPart()));
+        resource.setSubject(new Reference("Patient/" + patient.getIdElement().getIdPart()));
 
-        return careTeam;
+        resourceMap.put(id, resource);
+    }
+
+    public String generateResourceId(Patient patient, Map<String, String> record) {
+        return patient.getIdElement().getIdPart() + "_" + record.get(recordName);
+//        return record.get(recordName);
     }
 }

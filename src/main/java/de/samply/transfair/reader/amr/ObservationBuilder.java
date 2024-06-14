@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Date;
 
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +25,8 @@ import java.util.Map;
  */
 @Slf4j
 public class ObservationBuilder extends ResourceBuilder {
+    private Map<String,String> observationIdMap = new HashMap<String, String>();
+
     /**
      * Builds a FHIR Observation resource using attributes extracted from the record.
      *
@@ -32,7 +35,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param record A map containing observation data, where keys represent data attributes.
      * @return A constructed Observation resource with populated properties and extensions.
      */
-    public static Observation build(int recordCounter, Patient patient, Map<String, String> record, Map<String,String> observationIdMap) {
+    public Observation build(int recordCounter, Patient patient, Map<String, String> record) {
         Observation observation = new Observation();
 
         // Extract observation data from the map
@@ -83,6 +86,8 @@ public class ObservationBuilder extends ResourceBuilder {
         addReportingCountryExtension(observation, reportingCountry);
         addReferenceGuidelinesSirExtension(observation, referenceGuidelinesSir);
 
+        resourceMap.put(id, observation);
+
         return observation;
     }
 
@@ -92,7 +97,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param observation The Observation resource to which the extension will be added.
      * @param isolateId   The isolate ID value to be added to the extension.
      */
-    private static void addIsolateIdExtension(Observation observation, String isolateId) {
+    private void addIsolateIdExtension(Observation observation, String isolateId) {
         observation.addExtension(createStringExtension(isolateId, "https://ecdc.amr/fhir/StructureDefinition/ObservationIsolateId"));
     }
 
@@ -102,7 +107,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param observation The Observation resource to which the extension will be added.
      * @param dataSource  The data source value to be added to the extension.
      */
-    private static void addDataSourceExtension(Observation observation, String dataSource) {
+    private void addDataSourceExtension(Observation observation, String dataSource) {
         observation.addExtension(createStringExtension(dataSource, "https://ecdc.amr/fhir/StructureDefinition/ObservationDataSource"));
     }
 
@@ -112,7 +117,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param observation The Observation resource to which the extension will be added.
      * @param patientType The patient type value to be added to the extension.
      */
-    private static void addPatientTypeExtension(Observation observation, String patientType) {
+    private void addPatientTypeExtension(Observation observation, String patientType) {
         observation.addExtension(createStringExtension(patientType, "https://ecdc.amr/fhir/StructureDefinition/ObservationPatientType"));
     }
 
@@ -122,7 +127,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param observation      The Observation resource to which the extension will be added.
      * @param reportingCountry The reporting country value to be added to the extension.
      */
-    private static void addReportingCountryExtension(Observation observation, String reportingCountry) {
+    private void addReportingCountryExtension(Observation observation, String reportingCountry) {
         observation.addExtension(createStringExtension(reportingCountry, "https://ecdc.amr/fhir/StructureDefinition/ObservationReportingCountry"));
     }
 
@@ -132,7 +137,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param observation      The Observation resource to which the extension will be added.
      * @param referenceGuidelinesSir The reference guidelines value to be added to the extension.
      */
-    private static void addReferenceGuidelinesSirExtension(Observation observation, String referenceGuidelinesSir) {
+    private void addReferenceGuidelinesSirExtension(Observation observation, String referenceGuidelinesSir) {
         observation.addExtension(createStringExtension(referenceGuidelinesSir, "https://ecdc.amr/fhir/StructureDefinition/ObservationReferenceGuidelinesSIR"));
     }
 
@@ -144,7 +149,7 @@ public class ObservationBuilder extends ResourceBuilder {
      * @param sir        The SIR (degree of antibiotic resistance) value.
      * @return A CodeableConcept representing the value of the Observation.
      */
-    private static CodeableConcept constructObjectValueCodeableConcept(String pathogen, String antibiotic, String sir) {
+    private CodeableConcept constructObjectValueCodeableConcept(String pathogen, String antibiotic, String sir) {
         CodeableConcept codeableConcept = new CodeableConcept();
         // Add coding for pathogen
         Coding pathogenCoding = new Coding();
