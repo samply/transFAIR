@@ -46,7 +46,7 @@ public class CareTeamBuilder extends ResourceBuilder {
     }
 
     public String generateResourceId(Patient patient, Map<String, String> record) {
-        return patient.getIdElement().getIdPart() + "_" + record.get(recordName);
+        return patient.getIdElement().getIdPart() + "-" + record.get(recordName);
 //        return record.get(recordName);
     }
 }
