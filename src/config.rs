@@ -11,6 +11,8 @@ pub struct Config {
     pub institute_ttp_url: Url,
     #[clap(long, env)]
     pub institute_ttp_api_key: String,
+    #[clap(long, env)]
+    pub database_url: Url,
     // NOTE: You can't pass multiple projects through environment, only through args like
     // cargo run -- --projects '<project_1>' '<project_2>'
     #[clap(long, env, num_args = 1, value_delimiter=';', required = true)]

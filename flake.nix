@@ -22,7 +22,7 @@
           };
           rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ];
-          buildInputs = with pkgs; [ openssl ];
+          buildInputs = with pkgs; [ openssl sqlite sqlx-cli ];
         in
         rec {
           # nix develop
@@ -48,6 +48,7 @@
             ML_ROUTINE_CONNECTOR_PASSPHRASE="routine-connector-password";
             ML_DIZ_PASSPHRASE="diz-password";
             ML_LOG_LEVEL="debug";
+            DATABASE_URL="sqlite://data_requests.sql?mode=rwc";
             # Start Compose Environment when opening Project
             shellHook = ''
               docker compose up -d

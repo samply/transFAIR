@@ -23,4 +23,8 @@ fn main() {
         "cargo:rustc-env=SAMPLY_USER_AGENT=Routine Connector/{}",
         version()
     );
+
+    // Ensure running new migrations, even if no source file is changed.
+    // https://docs.rs/sqlx/latest/sqlx/macro.migrate.html#triggering-recompilation-on-migration-changes
+    println!("cargo:rerun-if-changed=migrations");
 }

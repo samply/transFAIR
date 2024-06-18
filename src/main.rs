@@ -4,6 +4,7 @@ use clap::Parser;
 use config::{Config, ProjectConfig};
 use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
 use once_cell::sync::Lazy;
+use sqlx::{migrate::MigrateDatabase, SqlitePool};
 use tracing::{debug, error, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
@@ -28,6 +29,14 @@ async fn main() {
     banner::print_banner();
     debug!("{:#?}", Lazy::force(&CONFIG));
 
+    let database_pool = SqlitePool::connect(CONFIG.database_url.as_str())
+        .await.map_err(|e| {
+            error!("Unable to connect to database file {}. Error is: {}", CONFIG.database_url.as_str(), e);
+            return
+        }).unwrap();
+    
+    let _ = sqlx::migrate!().run(&database_pool).await;
+
     tokio::spawn(async move {
         if let Err(e) = process_data_requests(&CONFIG.projects).await {
             warn!("Failed to fetch project data: {e}. Will try again later");
@@ -44,7 +53,8 @@ async fn main() {
     let request_routes = Router::new()
         .route("/", post(create_data_request))
         .route("/", get(list_data_requests))
-        .route("/:request_id", get(get_data_request));
+        .route("/:request_id", get(get_data_request))
+        .with_state(database_pool);
 
     let app = Router::new()
         .nest("/requests", request_routes);

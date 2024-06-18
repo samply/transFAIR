@@ -1,22 +1,23 @@
-use axum::{extract::Path, Json};
+use axum::{extract::{Path, State}, Json};
 use chrono::NaiveDate;
 use fhir_sdk::r4b::resources::Consent;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
-use tracing::debug;
-use uuid::Uuid;
+use sqlx::{Pool, Sqlite, types::Uuid};
+use tracing::{debug, error};
 
 use crate::{fhir::post_consent, mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG};
 
-#[derive(Serialize)]
+#[derive(Serialize, sqlx::Type)]
+// #[repr(i8)]
 pub enum RequestStatus {
-    Created,
-    _DataLoaded,
-    _UpdateAvailable,
-    Error,
+    Created = 1,
+    _DataLoaded = 2,
+    _UpdateAvailable = 3,
+    Error = 4,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, sqlx::FromRow)]
 pub struct DataRequest {
     id: Uuid,
     status: RequestStatus,
@@ -45,7 +46,10 @@ pub struct DataRequestPayload {
 }
 
 // POST /requests; Creates a new Data Request
-pub async fn create_data_request(Json(payload): Json<DataRequestPayload>) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
+pub async fn create_data_request(
+    State(database_pool): State<Pool<Sqlite>>,
+    Json(payload): Json<DataRequestPayload>
+) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
     // NOTE: For now we only allow one project, but will later add support for multiple projects
     let project = &CONFIG.projects[0];
     validate_data_request(payload.patient.clone()).await?; 
@@ -54,32 +58,60 @@ pub async fn create_data_request(Json(payload): Json<DataRequestPayload>) -> Res
     let consent = document_patient_consent(payload.consent, identifiers).await?;
     debug!("TTP returned this consent for Patient {:?}", consent);
     let _consent_from_inbox = post_consent(&project.consent_fhir_url, consent).await?;
-    // TODO: store this for later processing
-    Ok(Json(DataRequest {
+
+    let data_request = DataRequest {
       id: Uuid::new_v4(),
       status: RequestStatus::Created,
-    }))
+    };
+
+    let sqlite_query_result = sqlx::query!(
+        "INSERT INTO data_requests (id, status) VALUES ($1, $2)",
+        data_request.id, data_request.status
+    ).execute(&database_pool).await.map_err(|e| {
+        error!("Unable to persist data request to database. {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Unable to persist data request to database.")
+    }).unwrap();
+
+    let last_insert_rowid = sqlite_query_result.last_insert_rowid();
+    debug!("Inserted data request in row {}", last_insert_rowid);
+
+    Ok(Json(data_request))
 }
 
 // GET /requests; Lists all running Data Requests
-pub async fn list_data_requests() -> Json<Vec<DataRequest>> {
-    let mock_request = DataRequest {
-        id: Uuid::new_v4(),
-        status: RequestStatus::Error,
-    };
-    let mut data_requests = Vec::new();
-    data_requests.push(mock_request);
-    Json(data_requests)
+pub async fn list_data_requests(
+    State(database_pool): State<Pool<Sqlite>>
+) -> Result<Json<Vec<DataRequest>>, (StatusCode, &'static str)> {
+    let data_requests = sqlx::query_as!(
+        DataRequest,
+        r#"SELECT id as "id: uuid::Uuid", status as "status: _" FROM data_requests;"#,
+    ).fetch_all(&database_pool).await.map_err(|e| {
+       error!("Unable to fetch data requests from database: {}", e); 
+       (StatusCode::INTERNAL_SERVER_ERROR, "Unable to fetch data requests from database!")
+    }).unwrap();
+    Ok(Json(data_requests))
 }
 
 // GET /requests/<request-id>; Gets the Request specified by id in Path
-pub async fn get_data_request(Path(request_id): Path<Uuid>) -> Json<DataRequest> {
-    debug!("get data request called for request {}", request_id);
-    let data_request = DataRequest {
-        id: request_id,
-        status: RequestStatus::Error,
-    };
-    Json(data_request)
+pub async fn get_data_request(
+    State(database_pool): State<Pool<Sqlite>>,
+    Path(request_id): Path<Uuid>
+) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
+    debug!("Information on data request {} requested.", request_id);
+    let data_request = sqlx::query_as!(
+        DataRequest,
+        r#"SELECT id as "id: uuid::Uuid", status as "status: _" FROM data_requests WHERE id = $1;"#,
+        request_id
+    ).fetch_optional(&database_pool).await.map_err(|e| {
+        error!("Unable to fetch data request {} from database: {}", request_id, e);
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Unable to fetch data request with id {}", request_id))
+    }).unwrap();
+    if data_request.is_none() {
+        // TODO: Find out how to generate a proper error here? It somehow expects () ...
+        // Err((StatusCode::NOT_FOUND, "Something"))
+        // (StatusCode::NOT_FOUND, format!("Couldn't retrieve data request with id {}", request_id))
+    }
+    Ok(Json(data_request.unwrap()))
 }
 
 async fn validate_data_request(patient: Patient) -> Result<(), (StatusCode, &'static str)>  {
