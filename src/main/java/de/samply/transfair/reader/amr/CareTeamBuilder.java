@@ -37,7 +37,7 @@ public class CareTeamBuilder extends ResourceBuilder {
 
         CareTeam resource = new CareTeam();
         resource.setId(id);
-        resource.setName(nameStartingString + " " + id);
+        resource.setName(nameStartingString + " " + record.get(recordName));
 
         // Set the patient as the subject. Needed for population estimation.
         resource.setSubject(new Reference("Patient/" + patient.getIdElement().getIdPart()));
@@ -45,8 +45,16 @@ public class CareTeamBuilder extends ResourceBuilder {
         resourceMap.put(id, resource);
     }
 
+    /**
+     * For each Patient, there will be one CareTeam resource for each Laboratory, Refguide, etc.
+     * This method creates a unique resource ID based on the Patient ID and the Lab/Refguide
+     * CareTeam ID.
+     *
+     * @param patient
+     * @param record
+     * @return new ID
+     */
     public String generateResourceId(Patient patient, Map<String, String> record) {
         return patient.getIdElement().getIdPart() + "-" + record.get(recordName);
-//        return record.get(recordName);
     }
 }
