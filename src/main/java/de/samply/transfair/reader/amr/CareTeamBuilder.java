@@ -1,13 +1,10 @@
 package de.samply.transfair.reader.amr;
 
 import lombok.extern.slf4j.Slf4j;
-import org.hl7.fhir.r4.model.Resource;
-import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.CareTeam;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Reference;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -19,7 +16,7 @@ import java.util.Map;
  */
 @Slf4j
 public class CareTeamBuilder extends ResourceBuilder {
-    protected String nameStartingString;
+    protected String careTeamType;
 
     /**
      * Builds a FHIR CareTeam resource using attributes extracted from the record.
@@ -37,7 +34,8 @@ public class CareTeamBuilder extends ResourceBuilder {
 
         CareTeam resource = new CareTeam();
         resource.setId(id);
-        resource.setName(nameStartingString + " " + record.get(recordName));
+        resource.setName(record.get(recordName)); // set name to be a CareTeam ID, e.g. of a laboratory
+        resource.getNoteFirstRep().setText(careTeamType); // set first note to the type of the CareTeam, e.g. "Laboratory"
 
         // Set the patient as the subject. Needed for population estimation.
         resource.setSubject(new Reference("Patient/" + patient.getIdElement().getIdPart()));

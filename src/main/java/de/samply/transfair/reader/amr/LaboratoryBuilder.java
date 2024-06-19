@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class LaboratoryBuilder extends CareTeamBuilder {
     public LaboratoryBuilder() {
-        nameStartingString = "Laboratory";
+        careTeamType = "Laboratory";
         recordName = "LaboratoryCode";
     }
 }

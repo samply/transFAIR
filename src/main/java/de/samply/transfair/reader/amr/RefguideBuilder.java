@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RefguideBuilder extends CareTeamBuilder {
     public RefguideBuilder() {
-        nameStartingString = "Refguide";
+        careTeamType = "Refguide";
         recordName = "ReferenceGuidelinesSIR";
     }
 }
