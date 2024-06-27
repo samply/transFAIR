@@ -106,9 +106,10 @@ async fn create_mainzelliste_session() -> Result<Session, (StatusCode, &'static 
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
 enum TokenType {
     // #[serde(with = "TokenType")] 
-    addConsent
+    AddConsent
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -144,7 +145,7 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType) -> R
         warn!("This token was returned by the mainzelliste: {:?}", res);
         Token {
             id: Some(format!("bla")),
-            token_type: TokenType::addConsent
+            token_type: TokenType::AddConsent
         }
     })
     .map_err(|err| {
@@ -175,7 +176,7 @@ pub async fn document_patient_consent(
 
     let session = create_mainzelliste_session().await?; 
     
-    let token = create_mainzelliste_token(session, TokenType::addConsent).await?;
+    let token = create_mainzelliste_token(session, TokenType::AddConsent).await?;
 
     // if token.id.is_none() {
     //     return Err((StatusCode:: INTERNAL_SERVER_ERROR, "Unable to create Token in Mainzelliste TTP"))

@@ -4,7 +4,7 @@ use clap::Parser;
 use config::{Config, ProjectConfig};
 use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
 use once_cell::sync::Lazy;
-use sqlx::{migrate::MigrateDatabase, SqlitePool};
+use sqlx::SqlitePool;
 use tracing::{debug, error, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
@@ -85,8 +85,8 @@ async fn process_data_requests(projects: &Vec<ProjectConfig>) -> Result<(), Stri
         if result.entry.is_empty() {
             debug!("Received empty bundle from mdat server ({}). No update necessary", data.0.mdat_fhir_url);
         } else {
-            let response = put_mdat_as_bundle(data.0.project_fhir_url.clone(), result);
             // TODO: error handling
+            put_mdat_as_bundle(data.0.project_fhir_url.clone(), result).await;
         }
     }
     Ok(())
