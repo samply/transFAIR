@@ -1,6 +1,6 @@
 use axum::{extract::{Path, State}, Json};
-use chrono::NaiveDate;
-use fhir_sdk::r4b::resources::Consent;
+
+use fhir_sdk::r4b::resources::{Consent, Patient};
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite, types::Uuid};
@@ -30,15 +30,6 @@ pub struct Name {
     pub prefix: Vec<String>
 }
 
-type IdType = String;
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Patient {
-    pub name: Name,
-    pub birth_date: NaiveDate,
-    pub identifiers: Vec<IdType>
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DataRequestPayload {
     pub patient: Patient,
@@ -53,6 +44,11 @@ pub async fn create_data_request(
     // NOTE: For now we only allow one project, but will later add support for multiple projects
     let project = &CONFIG.projects[0];
     validate_data_request(payload.patient.clone()).await?; 
+    // TODO: Hier muss eine Überprüfung stattfinden, ob wir das szenario mit oder ohne TTP haben
+    // Je nach Fall muss dann entweder 
+    // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
+    // mit) eine anfrage an die TTP übermittelt werden und dafür entsprechende Pseudonyme angefragt werden. Dafür muss validiert werden das die Anfrage des Projekts auch das richtige Projektpseudonym anfragt
+    // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
     let identifiers = create_project_pseudonym(payload.patient.clone()).await?;
     debug!("TTP Returned these identifiers {:#?}", identifiers);
     let consent = document_patient_consent(payload.consent, identifiers).await?;
@@ -116,9 +112,19 @@ pub async fn get_data_request(
 
 async fn validate_data_request(patient: Patient) -> Result<(), (StatusCode, &'static str)>  {
     let ttp_supported_ids = get_supported_ids().await?;
-    let are_ids_supported = patient.identifiers
+    let are_ids_supported = patient.identifier
             .iter()
-            .all(|identifier| ttp_supported_ids.contains(identifier));
+            .flatten()
+            .all(|identifier| {
+                ttp_supported_ids
+                .iter()
+                .any(|supported| 
+                    identifier.system.clone()
+                    .ok_or(
+                        (StatusCode::BAD_REQUEST, "Supplied identifier in request did not contain a system!")
+                    )
+                    .unwrap().eq(supported))
+            });
     if ! are_ids_supported {
         Err((StatusCode::BAD_REQUEST, "The TTP doesn't support one of the requested id types."))
     } else {

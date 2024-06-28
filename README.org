@@ -1423,5 +1423,38 @@ Content-Type: application/fhir+json
    Abklären ob Funktion 2 überhaupt gewünscht, wenn ja: FHIR Server für ROutine Daten erwarten, fhir search parameter hinzufügen und schnittstelle von ID_Management abfragen
 5) Wie sieht bisher die Infrastruktur für ResearchProjekts aus?
    Soweit ich es verstehe soll ein Consent auf ein ResearchProject verweisen. Dieses müsste dann ja mit der Consent Resource übermittelt werden. Einfach als Bundle?
+* Designentscheidungen
+** Wie geht der Routine Connnector mit verschiedenen Verarbeitungsmodi um
+Bei der Kommunikation des Routine Connector spielen folgende IDs eine Rolle
+1) PROJECT_ID (*pro Projekt*)
+   Pseudonym das in der Projekt Datenbank hinterlegt wird
+2) DIZ_ID
+   Im DIZ verwendetes Pseudonym zur Identifikation von Patienten
+3) BK_ID
+   Pseudonym das im BK hinterlegt ist und für ein Linkage verwendet werden kann (Bsp. BK_XXX_L-ID oder externalId)
+4) SESSION_ID
+   Temporäres Pseudonym, welches nur für den Ausstausch zwischen DIZ und Routine Connector verwendet wird
+*Ausnahme:* BK Pseudonym = DIZ Pseudonym, dadurch wird ein Linkage mit der TTP überflüssig. Wie lässt sich dieser Fall erkennen?
+*** Szenarien
+Es muss in allen Fällen von der TTP ein Pseudonym für das Projekt vergeben werden. Da ansonsten die Daten zwischen den Projekten verknüpft werden könnten!
+1) Eine BK_ID entspricht DIZ_ID
+   Bsp. BK speichert die KIS_ID als externe ID und DIZ verwendet diese ebenfalls
+   In diesem Fall ist kein Record Linkage notwendig, da wir die Daten über die bereits existente ID verknüpfen können.
+   *Keine IDAT notwendig*
+   Aggiert in diesem Fall die BK Mainzelliste als "TTP?"
+2) BK_ID != DIZ_ID
+   In diesem Fall muss ein Linkage über IDAT durchgeführt werden, die SESSION_ID muss erzeugt werden um ein ungewolltes Linkage der PROJECT_ID und DIZ_ID zuverhindern.
+*** Was enthält die Request
+IDAT --\
+        --> Patient
+PSN ---/
+Consent (optional)
+*** Verarbeitungslogik
+| Anfrageinhalt  | Konfiguration                                                  | Verarbeitung                                                                        |
+| IDAT           | Trait Mainzelliste v GHWS ist aktiviert & PROJECT_ID definiert | Erstellung PROJECT_ID und SESSION_ID in konfigurierter TTP,                         |
+| IDAT + CONSENT | "                                                              | Erstellung PROJECT_ID und SESSION_ID in konfigurierter TTP, hinterlegen des Consent |
+| PSN            |                                                                | Reines ablegen der Anfrage mit PSN in Request Store                                 |
+| PSN  + CONSENT |                                                                | Reines ablegen der Anfrage mit PSN + CONSENT in Request Store                       |
+Unterscheidung zwischen Fall 1+2 und Fall 3+4 könnte durch das vorhanden sein eines Values im Identifier gemacht werden.
 * Roadmap
 ** Schnittstellen der Greifswald THS ebenfalls überprüfen

@@ -11,7 +11,7 @@ curl http://localhost:8080/requests \
       "prefix": []
     },
     "birth_date": "2000-01-01",
-    "identifiers": ["INTERNAL_ID"]
+    "identifiers": ["PROJECT_1_ID", "SESSION_ID"]
   },
   "consent": {
     "resourceType": "Consent",

@@ -1,15 +1,10 @@
 // Client implementation for Mainzelliste TTP
-
-use std::str::FromStr;
-
 use fhir_sdk::r4b::{
-    codes::AdministrativeGender,
-    resources::{Consent, IdentifiableResource, Patient},
-    types::{HumanName, Identifier},
+    codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::Identifier
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::CONFIG;
 
@@ -45,17 +40,35 @@ pub async fn get_supported_ids() -> Result<Vec<String>, (StatusCode, &'static st
     Ok(supported_ids)
 }
 
+// Adds request for a token (temporary Identifier) to the request
+fn add_token_request(patient: Patient) -> Patient {
+    let token_request = Identifier::builder()
+    .r#use(IdentifierUse::Temp)
+    .system(CONFIG.token_system.clone())
+    .build()
+    .map_err(|err| {
+        // TODO: Ensure that this will be a fatal error, as otherwise the linkage will not be possible
+        error!("Unable to add token request to data request. See error message: {}", err)
+    })
+    .unwrap();
+
+    let mut mutable_patient = patient.clone();
+    mutable_patient.identifier.push(Some(token_request));
+    mutable_patient 
+}
+
 pub async fn create_project_pseudonym(
-    patient: crate::requests::Patient,
+    patient: Patient,
 ) -> Result<Vec<Option<Identifier>>, (StatusCode, &'static str)> {
-    let identifier_request = build_identifier_request(patient);
+    // TODO: Need to ensure request for project pseudonym is included
+    let pseudonym_request = add_token_request(patient);
 
     let patients_endpoint = CONFIG.institute_ttp_url.join("fhir/Patient").unwrap();
 
     let response = reqwest::Client::new()
         .post(patients_endpoint)
         .header("mainzellisteApiKey", CONFIG.institute_ttp_api_key.clone())
-        .json(&identifier_request)
+        .json(&pseudonym_request)
         .send()
         .await
         .map_err(|err| {
@@ -184,7 +197,7 @@ pub async fn document_patient_consent(
 
     let consent_endpoint = CONFIG.institute_ttp_url.join("fhir/Consent").unwrap();
 
-    let response = reqwest::Client::new()
+    let response: reqwest::Response = reqwest::Client::new()
         .post(consent_endpoint)
         .header("Authorization", format!("MainzellisteToken {}", token.id.unwrap()))
         .header("Content-Type", "application/fhir+json")
@@ -215,50 +228,4 @@ pub async fn document_patient_consent(
     //     .unwrap();
 
     Ok(consent)
-}
-
-// maps the program input to a valid identifier request in fhir
-fn build_identifier_request(patient: crate::requests::Patient) -> Patient {
-    let identifier_requests = patient
-        .identifiers
-        .iter()
-        .map(|identifier| {
-            Some(
-                Identifier::builder()
-                    .r#use(fhir_sdk::r4b::codes::IdentifierUse::Temp)
-                    .system(identifier.to_owned())
-                    .build()
-                    .unwrap(),
-            )
-        })
-        .collect();
-
-    let birth_date = fhir_sdk::Date::from_str(&patient.birth_date.to_string())
-        .map_err(|err| {
-            warn!("Couln't parse birthdate from input. Error war {}", err);
-            (
-                StatusCode::BAD_REQUEST,
-                "Couln't parse birthdate from input.",
-            )
-        })
-        .unwrap();
-
-    let patient = Patient::builder()
-        .active(false)
-        .identifier(identifier_requests)
-        .gender(AdministrativeGender::Male)
-        .name(vec![Some(
-            HumanName::builder()
-                .r#use(fhir_sdk::r4b::codes::NameUse::Official)
-                .family(patient.name.family)
-                .given(vec![Some(patient.name.given)])
-                .build()
-                .unwrap(),
-        )])
-        .birth_date(birth_date)
-        .build()
-        .unwrap();
-
-    debug!("Created following patient resource: {:?}", patient);
-    patient
 }
