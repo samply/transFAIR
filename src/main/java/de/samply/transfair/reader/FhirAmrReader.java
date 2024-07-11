@@ -3,9 +3,6 @@ package de.samply.transfair.reader;
 import de.samply.transfair.reader.amr.CsvReader;
 import de.samply.transfair.reader.amr.PatientBuilder;
 import de.samply.transfair.reader.amr.ObservationBuilder;
-import de.samply.transfair.reader.amr.LaboratoryBuilder;
-import de.samply.transfair.reader.amr.HospitalBuilder;
-import de.samply.transfair.reader.amr.RefguideBuilder;
 import de.samply.transfair.reader.amr.SpecimenBuilder;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,9 +65,6 @@ public class FhirAmrReader implements ItemReader<Bundle> {
     PatientBuilder patientBuilder = new PatientBuilder();
     SpecimenBuilder specimenBuilder = new SpecimenBuilder();
     ObservationBuilder observationBuilder = new ObservationBuilder();
-    LaboratoryBuilder laboratoryBuilder = new LaboratoryBuilder();
-    HospitalBuilder hospitalBuilder = new HospitalBuilder();
-    RefguideBuilder refguideBuilder = new RefguideBuilder();
     int recordCounter = 0;
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(amrFilePath)) {
       Patient patient = patientBuilder.build(record);
@@ -78,23 +72,13 @@ public class FhirAmrReader implements ItemReader<Bundle> {
 
       // Create the observation
       Observation observation = observationBuilder.build(recordCounter, patient, record);
+
       recordCounter++;
-
-      // Skip if this observation is a duplicate
-      if (observation == null)
-        continue;
-
-      laboratoryBuilder.build(patient, record);
-      hospitalBuilder.build(patient, record);
-      refguideBuilder.build(patient, record);
     }
 
     observationBuilder.addResourcesToBundle(bundle);
     patientBuilder.addResourcesToBundle(bundle);
     specimenBuilder.addResourcesToBundle(bundle);
-    laboratoryBuilder.addResourcesToBundle(bundle);
-    hospitalBuilder.addResourcesToBundle(bundle);
-    refguideBuilder.addResourcesToBundle(bundle);
 
     return bundle;
   }
