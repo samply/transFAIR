@@ -18,7 +18,7 @@
 		<maven.compiler.source>17</maven.compiler.source>
 		<maven.compiler.target>17</maven.compiler.target>
 		<dcm4che.version>5.30.0</dcm4che.version>
-		<hapi.version>6.8.5</hapi.version>
+		<hapi.version>7.2.2</hapi.version>
 	</properties>
 	<repositories>
 		<repository>
