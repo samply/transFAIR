@@ -3,11 +3,14 @@ name: Build
 on:
   push:
     branches:
-      - main
+      - $default-branch
       - develop
+    # Build then a new version is tagged
+    tags:
+      - '*.*.*'
   pull_request:
     branches:
-      - main
+      - $default-branch
       - develop
 
 jobs:
@@ -18,6 +21,8 @@ jobs:
     with:
       # The Docker Hub Repository you want eventually push to, e.g samply/share-client
       image-name: "samply/transfair"
+      # Where to push your images ("dockerhub", "ghcr", "both" or "none")
+      push-to: dockerhub
       # Define special prefixes for docker tags. They will prefix each images tag.
       # image-tag-prefix: "foo"
       # Define the build context of your image, typically default '.' will be enough
