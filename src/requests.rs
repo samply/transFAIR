@@ -52,7 +52,9 @@ pub async fn create_data_request(
 ) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
     // NOTE: For now we only allow one project, but will later add support for multiple projects
     let project = &CONFIG.projects[0];
-    validate_data_request(payload.patient.clone()).await?; 
+    if ! ids_supported(payload.patient.clone()).await? {
+        return Err((StatusCode::BAD_REQUEST, "The TTP doesn't support one of the requested id types."));
+    }
     let identifiers = create_project_pseudonym(payload.patient.clone()).await?;
     debug!("TTP Returned these identifiers {:#?}", identifiers);
     let consent = document_patient_consent(payload.consent, identifiers).await?;
@@ -114,8 +116,10 @@ pub async fn get_data_request(
     Ok(Json(data_request.unwrap()))
 }
 
-async fn validate_data_request(patient: Patient) -> Result<(), (StatusCode, &'static str)>  {
+// this function should return true if the id is supported
+async fn ids_supported(patient: Patient) -> Result<bool, (StatusCode, &'static str)> {
     let ttp_supported_ids = get_supported_ids().await?;
+<<<<<<< Updated upstream
     let are_ids_supported = patient.identifiers
             .iter()
             .all(|identifier| ttp_supported_ids.contains(identifier));
@@ -124,4 +128,20 @@ async fn validate_data_request(patient: Patient) -> Result<(), (StatusCode, &'st
     } else {
         Ok(())
     }
+=======
+    let ids_supported = patient.identifier
+        .iter()
+        .flatten()
+        .all(|identifier| {
+            ttp_supported_ids
+            .iter()
+            .any(|supported| 
+                identifier.system.clone()
+                .ok_or(
+                    (StatusCode::BAD_REQUEST, "Supplied identifier in request did not contain a system!")
+                )
+                .unwrap().eq(supported))
+        });
+    Ok(ids_supported)
+>>>>>>> Stashed changes
 }

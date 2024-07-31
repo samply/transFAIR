@@ -286,6 +286,43 @@ Content-Type: application/fhir+json
     }
   ],
   "meta": {
+    "versionId": "1",
+    "lastUpdated": "2024-07-19T09:26:52.658Z"
+  },
+  "name": [
+    {
+      "use": "official",
+      "family": "Timberlake",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "birthDate": "1981-01-31",
+  "resourceType": "Patient",
+  "id": "DEGKKDI3IYZKG25V",
+  "identifier": [
+    {
+      "use": "secondary",
+      "system": "DIZ_ID",
+      "value": "005TY0EC"
+    }
+  ],
+  "gender": "male"
+}
+{
+  "address": [
+    {
+      "type": "both",
+      "line": [
+        "Teststraße 2"
+      ],
+      "city": "Köln",
+      "postalCode": "50823",
+      "country": "DE"
+    }
+  ],
+  "meta": {
     "versionId": "7",
     "lastUpdated": "2024-03-22T13:36:10.055Z"
   },
@@ -446,10 +483,7 @@ Content-Type: application/fhir+json
     },
     "performedDateTime": "2020-04-23",
     "subject": {
-        "identifier": {
-            "system": "DIZ_ID",
-            "value": "005TY0EC"
-        }
+        "reference": "Patient/DEGKKDI3IYZKG25V"
     }
 }
 #+end_src
@@ -457,55 +491,22 @@ Content-Type: application/fhir+json
 #+RESULTS:
 #+BEGIN_SRC js
 {
-  "category": {
-    "coding": [
-      {
-        "system": "http://snomed.info/sct",
-        "code": "387713003",
-        "display": "Surgical procedure (procedure)"
-      }
-    ]
-  },
-  "meta": {
-    "versionId": "9",
-    "lastUpdated": "2024-03-22T13:56:10.253Z"
-  },
-  "resourceType": "Procedure",
-  "status": "completed",
-  "id": "DDTGOKMW4ML7HSCJ",
-  "performedDateTime": "2020-04-23",
-  "code": {
-    "coding": [
-      {
-        "system": "http://snomed.info/sct",
-        "code": "80146002",
-        "display": "Excision of appendix (procedure)"
-      },
-      {
-        "system": "http://fhir.de/CodeSystem/dimdi/ops",
-        "version": "2020",
-        "code": "5-470",
-        "display": "Appendektomie"
-      }
-    ]
-  },
-  "subject": {
-    "identifier": {
-      "system": "DIZ_ID",
-      "value": "005TY0EC"
+  "issue": [
+    {
+      "severity": "error",
+      "code": "conflict",
+      "diagnostics": "Referential integrity violated. Resource `Patient/DEGKKHIUUHZRONYO` doesn't exist."
     }
-  }
+  ],
+  "resourceType": "OperationOutcome"
 }
 // POST http://localhost:8090/fhir/Procedure
-// HTTP/1.1 201 Created
-// Last-Modified: Fri, 22 Mar 2024 13:56:10 GMT
-// ETag: W/"9"
-// Location: http://localhost:8080/fhir/Procedure/DDTGOKMW4ML7HSCJ/_history/9
+// HTTP/1.1 409 Conflict
 // Content-Type: application/fhir+json;charset=utf-8
 // Access-Control-Allow-Origin: *
-// Server: Blaze/0.25.0
-// Content-Length: 584
-// Request duration: 0.066382s
+// Server: Blaze/0.28.0
+// Content-Length: 183
+// Request duration: 0.025139s
 #+END_SRC
 
 * Footnotes
