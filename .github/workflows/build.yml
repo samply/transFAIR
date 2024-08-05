@@ -3,18 +3,25 @@ name: Build
 on:
   push:
     branches:
-      - $default-branch
+      - main
       - develop
     # Build then a new version is tagged
     tags:
       - '*.*.*'
   pull_request:
     branches:
-      - $default-branch
+      - main
       - develop
 
 jobs:
-  docker-transfair:
+  build:
+    # Necessary after this repository was renamed from samply/lens-web-components to samply/lens
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+      security-events: write
+      statuses: read
     # This workflow defines how a maven package is built, tested and published.
     # Visit: https://github.com/samply/github-workflows/blob/develop/.github/workflows/docker-ci.yml, for more information
     uses: samply/github-workflows/.github/workflows/docker-ci.yml@main
@@ -23,6 +30,7 @@ jobs:
       image-name: "samply/transfair"
       # Where to push your images ("dockerhub", "ghcr", "both" or "none")
       push-to: dockerhub
+      build-platforms: "linux/amd64"
       # Define special prefixes for docker tags. They will prefix each images tag.
       # image-tag-prefix: "foo"
       # Define the build context of your image, typically default '.' will be enough
