@@ -3,14 +3,14 @@ name: Build
 on:
   push:
     branches:
-      - $default-branch
+      - main
       - develop
     # Build then a new version is tagged
     tags:
       - '*.*.*'
   pull_request:
     branches:
-      - $default-branch
+      - main
       - develop
 
 jobs:
