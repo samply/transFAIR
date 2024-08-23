@@ -3,17 +3,20 @@ use fhir_sdk::r4b::resources::{Bundle, Consent};
 use reqwest::{header, StatusCode};
 use tracing::{debug, error, warn};
 
+use crate::requests::DataRequestPayload;
+
 pub async fn post_consent(
     fhir_endpoint: &String,
-    consent: Consent,
+    data_request: DataRequestPayload
 ) -> Result<Consent, (StatusCode, &'static str)> {
     let consent_endpoint = format!("{}/fhir/Consent", fhir_endpoint);
     debug!("Posting consent to {}", consent_endpoint);
 
+    // TODO: We need to also push the whole data request (also the patient)
     let response = reqwest::Client::new()
         .post(consent_endpoint)
         .header(header::CONTENT_TYPE, "application/json+fhir")
-        .json(&consent)
+        .json(&data_request.consent)
         .send()
         .await
         .map_err(|err| {

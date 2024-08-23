@@ -1,7 +1,7 @@
 use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
-use config::{Config, ProjectConfig};
+use config::Config;
 use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
@@ -38,11 +38,11 @@ async fn main() {
     let _ = sqlx::migrate!().run(&database_pool).await;
 
     tokio::spawn(async move {
-        if let Err(e) = process_data_requests(&CONFIG.projects).await {
+        if let Err(e) = process_data_requests().await {
             warn!("Failed to fetch project data: {e}. Will try again later");
         }
         loop {
-            if let Err(e) = process_data_requests(&CONFIG.projects).await {
+            if let Err(e) = process_data_requests().await {
                 warn!("Failed to fetch project data: {e}. Will try again later");
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(60*60)).await;
@@ -65,29 +65,22 @@ async fn main() {
         .unwrap();
 }
 
-async fn process_data_requests(projects: &Vec<ProjectConfig>) -> Result<(), String> {
+async fn process_data_requests() -> Result<(), String> {
     let query_from_date = chrono::prelude::Utc::now() - Duration::days(1);
-    let project_data: Vec<_> = projects.iter().map(|project| {
-        (
-            project, 
-            get_mdat_as_bundle(
-                project.mdat_fhir_url.clone(), 
+    let project_data = get_mdat_as_bundle(
+               CONFIG.mdat_fhir_url.clone(), 
                 query_from_date.naive_local().into()
-            )
-        )
-    }).collect();
-    for data in project_data {
-        let result = data.1.await.map_err(|err| {
+            );
+    let result = project_data.await.map_err(|err| {
             // TODO: write down error and safe it to corresponding data request
-            error!("Unable to parse bundle returned by mdat server ({}): {}", data.0.mdat_fhir_url, err);
+            error!("Unable to parse bundle returned by mdat server ({}): {}", CONFIG.mdat_fhir_url, err);
             err
         }).unwrap();
-        if result.entry.is_empty() {
-            debug!("Received empty bundle from mdat server ({}). No update necessary", data.0.mdat_fhir_url);
+    if result.entry.is_empty() {
+            debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.mdat_fhir_url);
         } else {
             // TODO: error handling
-            put_mdat_as_bundle(data.0.project_fhir_url.clone(), result).await;
+            put_mdat_as_bundle(CONFIG.project_fhir_url.clone(), result).await;
         }
-    }
     Ok(())
 }

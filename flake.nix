@@ -31,16 +31,12 @@
             # Environment for Routine Connector
             INSTITUTE_TTP_URL="http://localhost:8081";
             INSTITUTE_TTP_API_KEY="routine-connector-password";
-            PROJECTS=''
-            {
-              "consent_fhir_url": "http://localhost:8085",
-              "consent_fhir_api_key": "bla",
-              "mdat_fhir_url": "http://localhost:8086",
-              "mdat_fhir_api_key": "foo",
-              "project_fhir_url": "http://localhost:8095",
-              "project_fhir_api_key": "foobar"
-            }
-            '';
+            CONSENT_FHIR_URL = "http://localhost:8085";
+            CONSENT_FHIR_API_KEY = "bla";
+            MDAT_FHIR_URL = "http://localhost:8086";
+            MDAT_FHIR_API_KEY = "foo";
+            PROJECT_FHIR_URL = "http://localhost:8095";
+            PROJECT_FHIR_API_KEY = "foobar";
             RUST_LOG="trace";
             no_proxy="localhost";
             # Environment for Mainzelliste

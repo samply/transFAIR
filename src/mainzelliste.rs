@@ -6,16 +6,14 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, warn};
 
-use crate::CONFIG;
+use crate::{config::Ttp, CONFIG};
 
-pub async fn get_supported_ids() -> Result<Vec<String>, (StatusCode, &'static str)> {
-    let idtypes_endpoint = CONFIG
-        .institute_ttp_url
-        .join("configuration/idTypes")
-        .unwrap();
+pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
+    let idtypes_endpoint = ttp.url.join("configuration/idTypes").unwrap();
+
     let supported_ids = reqwest::Client::new()
         .get(idtypes_endpoint)
-        .header("mainzellisteApiKey", &CONFIG.institute_ttp_api_key)
+        .header("mainzellisteApiKey", &ttp.api_key)
         .send()
         .await
         .map_err(|err| {
@@ -59,15 +57,16 @@ fn add_token_request(patient: Patient) -> Patient {
 
 pub async fn create_project_pseudonym(
     patient: Patient,
+    ttp: &Ttp
 ) -> Result<Vec<Option<Identifier>>, (StatusCode, &'static str)> {
     // TODO: Need to ensure request for project pseudonym is included
     let pseudonym_request = add_token_request(patient);
 
-    let patients_endpoint = CONFIG.institute_ttp_url.join("fhir/Patient").unwrap();
+    let patients_endpoint = ttp.url.join("fhir/Patient").unwrap();
 
     let response = reqwest::Client::new()
         .post(patients_endpoint)
-        .header("mainzellisteApiKey", CONFIG.institute_ttp_api_key.clone())
+        .header("mainzellisteApiKey", &ttp.api_key.clone())
         .json(&pseudonym_request)
         .send()
         .await
@@ -103,12 +102,13 @@ pub async fn create_project_pseudonym(
 struct Session {
     uri: String 
 }
-async fn create_mainzelliste_session() -> Result<Session, (StatusCode, &'static str)> {
-    let sessions_endpoint = CONFIG.institute_ttp_url.join("sessions").unwrap();
+async fn create_mainzelliste_session(ttp: &Ttp) -> Result<Session, (StatusCode, &'static str)> {
+    let sessions_endpoint = ttp.url.join("sessions").unwrap();
     debug!("Requesting Session from Mainzelliste: {}", sessions_endpoint);
+
     reqwest::Client::new()
         .post(sessions_endpoint)
-        .header("mainzellisteApiKey", &CONFIG.institute_ttp_api_key)
+        .header("mainzellisteApiKey", &ttp.api_key)
         .send()
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create mainzelliste session. Ensure configured apiKey is valid."))
@@ -132,7 +132,7 @@ struct Token {
     token_type: TokenType
 }
 
-async fn create_mainzelliste_token(session: Session, token_type: TokenType) -> Result<Token, (StatusCode, &'static str)> {
+async fn create_mainzelliste_token(session: Session, token_type: TokenType, ttp: &Ttp) -> Result<Token, (StatusCode, &'static str)> {
     debug!("create_mainzelliste_token called with: session={:?} token_type={:?}", session, token_type);
     let tokens_endpoint = format!("{}tokens", session.uri);
     debug!("Requesting addConsent Token from Mainzelliste: {}", tokens_endpoint);
@@ -142,7 +142,7 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType) -> R
     };
     reqwest::Client::new()
     .post(tokens_endpoint)
-    .header("mainzellisteApiKey", &CONFIG.institute_ttp_api_key)
+    .header("mainzellisteApiKey", &ttp.api_key)
     .json(&token_request)
     .send()
     .await
@@ -170,6 +170,7 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType) -> R
 pub async fn document_patient_consent(
     consent: Consent,
     identifiers: Vec<Option<Identifier>>,
+    ttp: &Ttp
 ) -> Result<Consent, (StatusCode, &'static str)> {
     if consent.patient.is_some() {
         warn!(
@@ -187,15 +188,15 @@ pub async fn document_patient_consent(
 
     debug!("{:?}", consent_with_identifiers);    
 
-    let session = create_mainzelliste_session().await?; 
+    let session = create_mainzelliste_session(&ttp).await?; 
     
-    let token = create_mainzelliste_token(session, TokenType::AddConsent).await?;
+    let token = create_mainzelliste_token(session, TokenType::AddConsent, &ttp).await?;
 
     // if token.id.is_none() {
     //     return Err((StatusCode:: INTERNAL_SERVER_ERROR, "Unable to create Token in Mainzelliste TTP"))
     // }
 
-    let consent_endpoint = CONFIG.institute_ttp_url.join("fhir/Consent").unwrap();
+    let consent_endpoint = ttp.url.join("fhir/Consent").unwrap();
 
     let response: reqwest::Response = reqwest::Client::new()
         .post(consent_endpoint)
