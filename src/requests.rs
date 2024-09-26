@@ -56,7 +56,7 @@ pub async fn create_data_request(
         // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
     }
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
-    let data_request_id = post_data_request(&CONFIG.consent_fhir_url, &CONFIG.consent_fhir_api_key, patient, consent).await?;
+    let data_request_id = post_data_request(&CONFIG.fhir_request_url, &CONFIG.fhir_request_credentials, patient, consent).await?;
 
     let data_request = DataRequest {
         id: data_request_id,

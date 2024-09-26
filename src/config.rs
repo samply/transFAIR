@@ -11,24 +11,24 @@ pub struct Config {
     #[clap(long, env)]
     pub database_url: Url,
     #[clap(long, env)]
-    pub consent_fhir_url: String,
+    pub fhir_request_url: String,
     #[clap(long, env)]
-    pub consent_fhir_api_key: String,
+    pub fhir_request_credentials: String,
     #[clap(long, env)]
-    pub mdat_fhir_url: String,
+    pub fhir_input_url: String,
     #[clap(long, env)]
-    pub mdat_fhir_api_key: String,
+    pub fhir_input_credentials: String,
     #[clap(long, env)]
-    pub project_fhir_url: String,
+    pub fhir_output_url: String,
     #[clap(long, env)]
-    pub project_fhir_api_key: String,
+    pub fhir_output_credentials: String,
 }
 
 #[derive(Args, Clone, Debug)]
 #[group(requires = "url", requires = "api_key")]
 pub struct Ttp {
-    #[arg(required = false, long = "ttp-url", env = "TTP_URL")]
+    #[arg(required = false, long = "institute-ttp-url", env = "INSTITUTE_TTP_URL")]
     pub url: Url,
-    #[arg(required = false, long = "ttp-api-key", env = "TTP_API_KEY")]
+    #[arg(required = false, long = "institute-ttp-api-key", env = "INSTITUTE_TTP_API_KEY")]
     pub api_key: String
 }

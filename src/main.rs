@@ -68,19 +68,19 @@ async fn main() {
 async fn process_data_requests() -> Result<(), String> {
     let query_from_date = chrono::prelude::Utc::now() - Duration::days(1);
     let project_data = get_mdat_as_bundle(
-               CONFIG.mdat_fhir_url.clone(), 
+               CONFIG.fhir_input_url.clone(), 
                 query_from_date.naive_local().into()
             );
     let result = project_data.await.map_err(|err| {
             // TODO: write down error and safe it to corresponding data request
-            error!("Unable to parse bundle returned by mdat server ({}): {}", CONFIG.mdat_fhir_url, err);
+            error!("Unable to parse bundle returned by mdat server ({}): {}", CONFIG.fhir_input_url, err);
             err
         }).unwrap();
     if result.entry.is_empty() {
-            debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.mdat_fhir_url);
+            debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
         } else {
             // TODO: error handling
-            put_mdat_as_bundle(CONFIG.project_fhir_url.clone(), result).await;
+            put_mdat_as_bundle(CONFIG.fhir_output_url.clone(), result).await;
         }
     Ok(())
 }

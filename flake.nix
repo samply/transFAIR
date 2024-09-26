@@ -31,12 +31,13 @@
             # Environment for Routine Connector
             INSTITUTE_TTP_URL="http://localhost:8081";
             INSTITUTE_TTP_API_KEY="routine-connector-password";
-            CONSENT_FHIR_URL = "http://localhost:8085";
-            CONSENT_FHIR_API_KEY = "bla";
-            MDAT_FHIR_URL = "http://localhost:8086";
-            MDAT_FHIR_API_KEY = "foo";
-            PROJECT_FHIR_URL = "http://localhost:8095";
-            PROJECT_FHIR_API_KEY = "foobar";
+            FHIR_REQUEST_URL = "http://localhost:8085";
+            FHIR_REQUEST_CREDENTIALS = "bla";
+            FHIR_INPUT_URL = "http://localhost:8086";
+            FHIR_INPUT_CREDENTIALS = "foo";
+            FHIR_OUTPUT_URL = "http://localhost:8095";
+            FHIR_OUTPUT_CREDENTIALS = "foobar";
+            DATABASE_URL="sqlite://data_requests.sql?mode=rwc";
             RUST_LOG="trace";
             no_proxy="localhost";
             # Environment for Mainzelliste
@@ -44,7 +45,6 @@
             ML_ROUTINE_CONNECTOR_PASSPHRASE="routine-connector-password";
             ML_DIZ_PASSPHRASE="diz-password";
             ML_LOG_LEVEL="debug";
-            DATABASE_URL="sqlite://data_requests.sql?mode=rwc";
             # Start Compose Environment when opening Project
             shellHook = ''
               docker compose up -d
