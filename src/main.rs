@@ -37,6 +37,9 @@ async fn main() {
     
     let _ = sqlx::migrate!().run(&database_pool).await;
 
+    // TODO: Verify that TTP is reachable
+    // TODO: Check that the TTP provides CONFIG.ttp.project_id_system and CONFIG.exchange_id_system, otherwise refuse to start
+
     tokio::spawn(async move {
         if let Err(e) = process_data_requests().await {
             warn!("Failed to fetch project data: {e}. Will try again later");

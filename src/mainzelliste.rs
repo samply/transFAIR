@@ -1,12 +1,10 @@
 // Client implementation for Mainzelliste TTP
-use fhir_sdk::r4b::{
-    codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::Identifier
-};
+use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
-use crate::{config::Ttp, CONFIG};
+use crate::config::Ttp;
 
 pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
     let idtypes_endpoint = ttp.url.join("configuration/idTypes").unwrap();
@@ -38,36 +36,17 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
     Ok(supported_ids)
 }
 
-// Adds request for a token (temporary Identifier) to the request
-fn add_token_request(patient: &Patient) -> Patient {
-    let token_request = Identifier::builder()
-    .r#use(IdentifierUse::Temp)
-    .system(CONFIG.token_system.clone())
-    .build()
-    .map_err(|err| {
-        // TODO: Ensure that this will be a fatal error, as otherwise the linkage will not be possible
-        error!("Unable to add token request to data request. See error message: {}", err)
-    })
-    .unwrap();
-
-    let mut mutable_patient = patient.clone();
-    mutable_patient.identifier.push(Some(token_request));
-    mutable_patient 
-}
-
-pub async fn create_project_pseudonym(
-    patient: &Patient,
+pub async fn request_project_pseudonym(
+    patient: &mut Patient,
     ttp: &Ttp
 ) -> Result<Patient, (StatusCode, &'static str)> {
     // TODO: Need to ensure request for project pseudonym is included
-    let pseudonym_request = add_token_request(patient);
-
     let patients_endpoint = ttp.url.join("fhir/Patient").unwrap();
 
     let response = reqwest::Client::new()
         .post(patients_endpoint)
         .header("mainzellisteApiKey", &ttp.api_key.clone())
-        .json(&pseudonym_request)
+        .json(&patient)
         .send()
         .await
         .map_err(|err| {

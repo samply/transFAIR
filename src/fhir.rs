@@ -5,7 +5,7 @@ use tracing::{debug, error, warn};
 
 pub async fn post_data_request(
     fhir_endpoint: &String,
-    fhir_api_key: &String,
+    _fhir_api_key: &String,
     patient: Patient,
     consent: Consent
 ) -> Result<String, (StatusCode, &'static str)> {
