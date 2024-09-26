@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite, types::Uuid};
 use tracing::{debug, error};
 
-use crate::{fhir::post_consent, mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG, config::Ttp};
+use crate::{fhir::post_data_request, mainzelliste::{create_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG, config::Ttp};
 
 #[derive(Serialize, sqlx::Type)]
 // #[repr(i8)]
@@ -19,7 +19,7 @@ pub enum RequestStatus {
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct DataRequest {
-    id: Uuid,
+    id: String,
     status: RequestStatus,
 }
 
@@ -41,24 +41,26 @@ pub async fn create_data_request(
     State(database_pool): State<Pool<Sqlite>>,
     Json(payload): Json<DataRequestPayload>
 ) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
+    let mut consent = payload.consent;
+    let mut patient = payload.patient;
     if let Some(ttp) = &CONFIG.ttp {
-        validate_data_request(payload.patient.clone(), &ttp).await?;
+        // TODO: Maybe change that check, so that we check if the configuration of routine connector is right and here only that the request is really allowed
+        validate_data_request(&patient, &ttp).await?;
         // mit) eine anfrage an die TTP übermittelt werden und dafür entsprechende Pseudonyme angefragt werden. Dafür muss validiert werden das die Anfrage des Projekts auch das richtige Projektpseudonym anfragt
         // TODO: Hier muss sichergestellt werden das das richtige Pseudonym erzeugt wird
-        let identifiers = create_project_pseudonym(payload.patient.clone(), &ttp).await?;
-        debug!("TTP Returned these identifiers {:#?}", identifiers);
-        let consent = document_patient_consent(payload.consent.clone(), identifiers, &ttp).await?;
+        patient = create_project_pseudonym(&patient, &ttp).await?;
+        debug!("TTP Returned these patient with project pseudonym {:#?}", &patient);
+        consent = document_patient_consent(consent, &patient, &ttp).await?;
         debug!("TTP returned this consent for Patient {:?}", consent);
     } else {
         // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
     }
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
-    // TODO: Hier muss statt nur dem consent die komplette Datenrequest abgelegt werden (Patient + Consent)
-    let _consent_from_inbox = post_consent(&CONFIG.consent_fhir_url, payload).await?;
+    let data_request_id = post_data_request(&CONFIG.consent_fhir_url, &CONFIG.consent_fhir_api_key, patient, consent).await?;
 
     let data_request = DataRequest {
-      id: Uuid::new_v4(),
-      status: RequestStatus::Created,
+        id: data_request_id,
+        status: RequestStatus::Created,
     };
 
     let sqlite_query_result = sqlx::query!(
@@ -109,7 +111,7 @@ pub async fn get_data_request(
     }
 }
 
-async fn validate_data_request(patient: Patient, ttp: &Ttp) -> Result<(), (StatusCode, &'static str)>  {
+async fn validate_data_request(patient: &Patient, ttp: &Ttp) -> Result<(), (StatusCode, &'static str)>  {
     let ttp_supported_ids = get_supported_ids(&ttp).await?;
     let are_ids_supported = patient.identifier
             .iter()

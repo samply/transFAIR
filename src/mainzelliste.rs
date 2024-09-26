@@ -39,7 +39,7 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
 }
 
 // Adds request for a token (temporary Identifier) to the request
-fn add_token_request(patient: Patient) -> Patient {
+fn add_token_request(patient: &Patient) -> Patient {
     let token_request = Identifier::builder()
     .r#use(IdentifierUse::Temp)
     .system(CONFIG.token_system.clone())
@@ -56,9 +56,9 @@ fn add_token_request(patient: Patient) -> Patient {
 }
 
 pub async fn create_project_pseudonym(
-    patient: Patient,
+    patient: &Patient,
     ttp: &Ttp
-) -> Result<Vec<Option<Identifier>>, (StatusCode, &'static str)> {
+) -> Result<Patient, (StatusCode, &'static str)> {
     // TODO: Need to ensure request for project pseudonym is included
     let pseudonym_request = add_token_request(patient);
 
@@ -93,9 +93,7 @@ pub async fn create_project_pseudonym(
         })
         .unwrap();
 
-    let patient_identifiers = patient.identifier.clone();
-
-    Ok(patient_identifiers)
+    Ok(patient)
 }
 
 #[derive(Deserialize, Debug)]
@@ -169,7 +167,7 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType, ttp:
 
 pub async fn document_patient_consent(
     consent: Consent,
-    identifiers: Vec<Option<Identifier>>,
+    patient: &Patient,
     ttp: &Ttp
 ) -> Result<Consent, (StatusCode, &'static str)> {
     if consent.patient.is_some() {
@@ -184,7 +182,7 @@ pub async fn document_patient_consent(
     }
 
     let mut consent_with_identifiers = consent.clone();
-    consent_with_identifiers.set_identifier(identifiers);
+    consent_with_identifiers.set_identifier(patient.identifier.clone());
 
     debug!("{:?}", consent_with_identifiers);    
 

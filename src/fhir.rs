@@ -1,41 +1,66 @@
 use chrono::NaiveDate;
-use fhir_sdk::r4b::resources::{Bundle, Consent};
+use fhir_sdk::r4b::resources::{Bundle, BundleEntry, BundleEntryRequest, Consent, Patient, Resource};
 use reqwest::{header, StatusCode};
 use tracing::{debug, error, warn};
 
-use crate::requests::DataRequestPayload;
-
-pub async fn post_consent(
+pub async fn post_data_request(
     fhir_endpoint: &String,
-    data_request: DataRequestPayload
-) -> Result<Consent, (StatusCode, &'static str)> {
-    let consent_endpoint = format!("{}/fhir/Consent", fhir_endpoint);
-    debug!("Posting consent to {}", consent_endpoint);
+    fhir_api_key: &String,
+    patient: Patient,
+    consent: Consent
+) -> Result<String, (StatusCode, &'static str)> {
+    let bundle_endpoint = format!("{}/fhir", fhir_endpoint);
+    debug!("Posting request for DIC to {}", fhir_endpoint);
 
-    // TODO: We need to also push the whole data request (also the patient)
-    let response = reqwest::Client::new()
-        .post(consent_endpoint)
-        .header(header::CONTENT_TYPE, "application/json+fhir")
-        .json(&data_request.consent)
-        .send()
-        .await
-        .map_err(|err| {
-            warn!("Unable to connnect to fhir consent server: {}", err);
-            (StatusCode::SERVICE_UNAVAILABLE, "Unable to connect to consent fhir server. Please try later.")
-        })
-        .unwrap();
+    let patient_entry = BundleEntry::builder()
+        .resource(Resource::from(patient))
+        .request(
+            BundleEntryRequest::builder()
+                .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
+                .url(String::from("/Patient"))
+                .build().unwrap()
+            ).build().unwrap();
 
-    if !response.status().is_success() {
-        error!("Unable to create consent in consent server: status={}", response.status());
+    let consent_entry = BundleEntry::builder()
+        .resource(Resource::from(consent))
+        .request(
+            BundleEntryRequest::builder()
+            .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
+            .url(String::from("/Consent"))
+            .build().unwrap()
+        ).build().unwrap();
+
+    let payload_bundle = Bundle::builder()
+        .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
+        .entry(
+            vec![
+                Some(patient_entry),
+                Some(consent_entry)
+            ]
+        ).build().unwrap();
+
+    let response = reqwest::Client::new().post(bundle_endpoint)
+    .header(header::CONTENT_TYPE, "application/json+fhir")
+    .json(&payload_bundle)
+    .send()
+    .await.map_err(|err | {
+        warn!("Unable to connect to fhir server: {}", err);
+        (StatusCode::SERVICE_UNAVAILABLE, "Unable to connect to consent fhir server. Please try later.")
+    }).unwrap();
+
+    if response.status().is_client_error() | response.status().is_server_error() {
+        error!("Unable to push request to server: status={}", response.status());
         return Err((StatusCode::BAD_GATEWAY, "Unable to create consent in consent server. Please contact your administrator."))
-    }
+    };
 
-    response.json::<Consent>() 
+    let bundle = response.json::<Bundle>()
         .await
         .map_err(|err| {
             error!("Unable to parse consent returned by fhir server: {}", err);
             (StatusCode::BAD_GATEWAY, "Unable to parse consent returned by consent server. Please contact your administrator.")
-        })
+        }).unwrap(); 
+
+    Ok(bundle.id.clone().expect("Consent Server returned bundle without id."))
 }
 
 pub async fn get_mdat_as_bundle(fhir_endpoint: String, last_update: NaiveDate) -> Result<Bundle, String> {
