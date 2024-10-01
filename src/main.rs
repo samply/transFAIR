@@ -1,3 +1,5 @@
+use std::{process::ExitCode, time};
+
 use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
@@ -5,7 +7,7 @@ use config::Config;
 use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
-use tracing::{debug, error, warn, Level};
+use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
 use crate::requests::{create_data_request, list_data_requests, get_data_request};
@@ -19,8 +21,12 @@ mod mainzelliste;
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
+trait CheckAvailability {
+    async fn check_availability(&self) -> bool;
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(Level::DEBUG)
         .with_env_filter(EnvFilter::from_default_env())
@@ -37,8 +43,27 @@ async fn main() {
     
     let _ = sqlx::migrate!().run(&database_pool).await;
 
-    // TODO: Verify that TTP is reachable
-    // TODO: Check that the TTP provides CONFIG.ttp.project_id_system and CONFIG.exchange_id_system, otherwise refuse to start
+    if let Some(ttp) = &CONFIG.ttp {
+        const RETRY_COUNT: i32 = 30;
+        let mut failures = 0;
+        while !(ttp.check_availability().await) {
+            failures += 1;
+            if failures >= RETRY_COUNT {
+                error!(
+                    "Encountered too many errors -- exiting after {} attempts.",
+                    RETRY_COUNT
+                );
+                return ExitCode::from(22);
+            }
+            tokio::time::sleep(time::Duration::from_secs(2)).await;
+            warn!(
+                "Retrying connection (attempt {}/{})",
+                failures, RETRY_COUNT
+            );
+        }
+        info!("Connected to ttp {}", ttp.url);
+        // TODO: Check that the TTP provides CONFIG.ttp.project_id_system and CONFIG.exchange_id_system, otherwise refuse to start
+    }
 
     tokio::spawn(async move {
         if let Err(e) = process_data_requests().await {
@@ -66,6 +91,8 @@ async fn main() {
     axum::serve(listener, app)
         .await
         .unwrap();
+
+    ExitCode::from(0)
 }
 
 async fn process_data_requests() -> Result<(), String> {

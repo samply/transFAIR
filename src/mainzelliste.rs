@@ -4,7 +4,28 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::config::Ttp;
+use crate::{config::Ttp, CheckAvailability};
+
+impl CheckAvailability for Ttp {
+    async fn check_availability(&self) -> bool {
+        let response = match reqwest::Client::new()
+            .get(self.url.clone())
+            .header( "Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                debug!("Error making request to mainzelliste: {:?}", e);
+                return false
+            }
+        };
+        if response.status().is_client_error() || response.status().is_server_error() {
+            return false;
+        }
+        true               
+    }
+}
 
 pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
     let idtypes_endpoint = ttp.url.join("configuration/idTypes").unwrap();
