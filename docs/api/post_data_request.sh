@@ -5,13 +5,13 @@ curl http://localhost:8080/requests \
 --data-binary @- << EOF
 {
   "patient": {
-    "name": {
+    "name": [{
       "family": "Mustermann",
-      "given": "Max",
-      "prefix": []
-    },
-    "birth_date": "2000-01-01",
-    "identifiers": ["PROJECT_1_ID", "SESSION_ID"]
+      "given": ["Max"],
+      "prefix": [],
+      "use": "official"
+    }],
+    "birthDate": "2000-01-01"
   },
   "consent": {
     "resourceType": "Consent",

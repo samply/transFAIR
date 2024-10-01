@@ -1,15 +1,15 @@
 use chrono::NaiveDate;
 use fhir_sdk::r4b::resources::{Bundle, BundleEntry, BundleEntryRequest, Consent, Patient, Resource};
-use reqwest::{header, StatusCode};
+use reqwest::{header, StatusCode, Url};
 use tracing::{debug, error, warn};
 
 pub async fn post_data_request(
-    fhir_endpoint: &String,
+    fhir_endpoint: &Url,
     _fhir_api_key: &String,
     patient: Patient,
     consent: Consent
 ) -> Result<String, (StatusCode, &'static str)> {
-    let bundle_endpoint = format!("{}/fhir", fhir_endpoint);
+    let bundle_endpoint = format!("{}fhir", fhir_endpoint);
     debug!("Posting request for DIC to {}", fhir_endpoint);
 
     let patient_entry = BundleEntry::builder()
@@ -63,42 +63,38 @@ pub async fn post_data_request(
     Ok(bundle.id.clone().expect("Consent Server returned bundle without id."))
 }
 
-pub async fn get_mdat_as_bundle(fhir_endpoint: String, last_update: NaiveDate) -> Result<Bundle, String> {
-    let bundle_endpoint = format!("{}/fhir/Bundle", fhir_endpoint);
-    debug!("Sending request to bundle_endpoint: {}", bundle_endpoint);
+// get data from fhir server that updated after a specified date
+pub async fn pull_new_data(fhir_endpoint: &Url, last_update: NaiveDate) -> Result<Bundle, String> {
+    let bundle_endpoint = format!("{}fhir/Bundle", fhir_endpoint);
+    debug!("Fetching new data from: {}", bundle_endpoint);
     let query = vec![
         ("_lastUpdated", format!("gt{}", last_update))
     ];
-    reqwest::Client::new()
+    let response = reqwest::Client::new()
         .get(bundle_endpoint)
         .query(&query)
         .send()
         .await
         .map_err(|err| {
-            error!("Unable to query data from mdat server: {}", err);
-            format!("Unable to query data from mdat server")
-        })
-        .unwrap()
-        .json::<Bundle>()
+            format!("Unable to query data from input server: {}", err)
+        })?;
+        response.json::<Bundle>()
         .await
         .map_err(|err| {
-            error!("Unable to parse bundle returned from mdat server: {}", err);
-            format!("Unable to parse bundle returned from mdat server")
+            format!("Unable to response from input server: {}", err)
         })
 }
 
-pub async fn put_mdat_as_bundle(fhir_endpoint: String, bundle: Bundle) -> reqwest::Response {
-    let bundle_endpoint = format!("{}/fhir", fhir_endpoint);
-    debug!("Pushing data to project database: {}", bundle_endpoint);
+// post a fhir bundle to a specified fhir server
+pub async fn post_data(fhir_endpoint: &Url, bundle: Bundle) -> Result<reqwest::Response, String> {
+    let bundle_endpoint = format!("{}fhir", fhir_endpoint);
+    debug!("Posting data to output fhir server: {}", bundle_endpoint);
     reqwest::Client::new()
         .post(bundle_endpoint)
         .json(&bundle)
         .send()
         .await
         .map_err(|err| {
-            let error_message = format!("Unable to post project data to mdat server: {}", err);
-            error!(error_message);
-            error_message
+            format!("Unable to post data to output fhir server: {}", err)
         })
-        .unwrap()
 }

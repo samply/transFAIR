@@ -4,10 +4,10 @@ use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::Config;
-use fhir::{get_mdat_as_bundle, put_mdat_as_bundle};
+use fhir::{pull_new_data, post_data};
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
-use tracing::{debug, error, info, warn, Level};
+use tracing::{debug, error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
 use crate::requests::{create_data_request, list_data_requests, get_data_request};
@@ -33,7 +33,7 @@ async fn main() -> ExitCode {
         .finish()
         .init();
     banner::print_banner();
-    debug!("{:#?}", Lazy::force(&CONFIG));
+    trace!("{:#?}", Lazy::force(&CONFIG));
 
     let database_pool = SqlitePool::connect(CONFIG.database_url.as_str())
         .await.map_err(|e| {
@@ -66,14 +66,14 @@ async fn main() -> ExitCode {
     }
 
     tokio::spawn(async move {
-        if let Err(e) = process_data_requests().await {
-            warn!("Failed to fetch project data: {e}. Will try again later");
-        }
+        const RETRY_PERIOD: u64 = 60;
         loop {
-            if let Err(e) = process_data_requests().await {
-                warn!("Failed to fetch project data: {e}. Will try again later");
+            // TODO: Persist the updated data in the database
+            match fetch_data().await {
+                Ok(status) => info!("{}", status),
+                Err(error) => warn!("Failed to fetch project data: {}. Will try again in {}", error, RETRY_PERIOD)
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(60*60)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_PERIOD)).await;
         }
     });
 
@@ -95,22 +95,19 @@ async fn main() -> ExitCode {
     ExitCode::from(0)
 }
 
-async fn process_data_requests() -> Result<(), String> {
-    let query_from_date = chrono::prelude::Utc::now() - Duration::days(1);
-    let project_data = get_mdat_as_bundle(
-               CONFIG.fhir_input_url.clone(), 
-                query_from_date.naive_local().into()
-            );
-    let result = project_data.await.map_err(|err| {
-            // TODO: write down error and safe it to corresponding data request
-            error!("Unable to parse bundle returned by mdat server ({}): {}", CONFIG.fhir_input_url, err);
-            err
-        }).unwrap();
-    if result.entry.is_empty() {
-            debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
-        } else {
-            // TODO: error handling
-            put_mdat_as_bundle(CONFIG.fhir_output_url.clone(), result).await;
-        }
-    Ok(())
+// Pull data from INPUT_FHIR and push it to OUTPUT_FHIR
+async fn fetch_data() -> Result<String, String> {
+    // TODO: Check if we can use a smarter logic to fetch all not fetched data
+    let fetch_start_date = chrono::prelude::Utc::now();
+    let query_from_date = fetch_start_date - Duration::days(1);
+    let new_data = pull_new_data(
+        &CONFIG.fhir_input_url, 
+        query_from_date.naive_local().into()
+    ).await?;
+    if new_data.entry.is_empty() {
+        debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
+    } else {
+        post_data(&CONFIG.fhir_output_url, new_data).await?;
+    }
+    Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }

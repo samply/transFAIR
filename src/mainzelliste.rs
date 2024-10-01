@@ -2,7 +2,7 @@
 use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{trace, debug, warn};
 
 use crate::{config::Ttp, CheckAvailability};
 
@@ -125,7 +125,12 @@ enum TokenType {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Token {
-    id: Option<String>,
+    #[serde(rename = "tokenId")]
+    id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct TokenRequest {
     #[serde(rename = "type")]
     token_type: TokenType
 }
@@ -134,9 +139,8 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType, ttp:
     debug!("create_mainzelliste_token called with: session={:?} token_type={:?}", session, token_type);
     let tokens_endpoint = format!("{}tokens", session.uri);
     debug!("Requesting addConsent Token from Mainzelliste: {}", tokens_endpoint);
-    let token_request = Token {
-        id: None,
-        token_type: token_type
+    let token_request = TokenRequest {
+        token_type
     };
     reqwest::Client::new()
     .post(tokens_endpoint)
@@ -149,16 +153,8 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType, ttp:
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to get Token from Mainzelliste")
     })
     .unwrap()
-    // .json::<Token>()
-    .text()
+    .json::<Token>()
     .await
-    .map(|res| {
-        warn!("This token was returned by the mainzelliste: {:?}", res);
-        Token {
-            id: Some(format!("bla")),
-            token_type: TokenType::AddConsent
-        }
-    })
     .map_err(|err| {
         warn!("Unable to parse token returned by mainzelliste: {}", err);
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to Parse Token from Mainzelliste: {}")
@@ -173,7 +169,7 @@ pub async fn document_patient_consent(
     if consent.patient.is_some() {
         warn!(
             "Received request with consent that already contained patient identifiers: {:?}",
-            consent.identifier
+            consent.patient
         );
         return Err((
             StatusCode::BAD_REQUEST,
@@ -181,24 +177,22 @@ pub async fn document_patient_consent(
         ));
     }
 
-    let mut consent_with_identifiers = consent.clone();
+    // TODO: Needs to be done outside of mainzelliste.rs
+    let mut consent_with_identifiers = consent.clone(); 
+    // TODO: Mainzelliste currently says the identifier don't have a proper system, maybe need to add the URL?
     consent_with_identifiers.set_identifier(patient.identifier.clone());
 
-    debug!("{:?}", consent_with_identifiers);    
+    trace!("{:?}", consent_with_identifiers);
 
     let session = create_mainzelliste_session(&ttp).await?; 
     
     let token = create_mainzelliste_token(session, TokenType::AddConsent, &ttp).await?;
 
-    // if token.id.is_none() {
-    //     return Err((StatusCode:: INTERNAL_SERVER_ERROR, "Unable to create Token in Mainzelliste TTP"))
-    // }
-
     let consent_endpoint = ttp.url.join("fhir/Consent").unwrap();
 
     let response: reqwest::Response = reqwest::Client::new()
         .post(consent_endpoint)
-        .header("Authorization", format!("MainzellisteToken {}", token.id.unwrap()))
+        .header("Authorization", format!("MainzellisteToken {}", token.id))
         .header("Content-Type", "application/fhir+json")
         .json(&consent_with_identifiers)
         .send()
@@ -214,17 +208,7 @@ pub async fn document_patient_consent(
 
     debug!("Response from TTP for Consent request: status={} text={}", response.status(), response.text().await.unwrap());
 
-    // let result = response
-    //     .json::<Consent>()
-    //     .await
-    //     .map_err(|err| {
-    //         warn!("Unable to parse Consent returned by TTP as JSON: {}", err);
-    //         (
-    //             StatusCode::INTERNAL_SERVER_ERROR,
-    //             "Unable to parse Consent returned by TTP as JSON",
-    //         )
-    //     })
-    //     .unwrap();
-
     Ok(consent)
 }
+
+

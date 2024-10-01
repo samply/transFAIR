@@ -1,10 +1,10 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::Identifier};
+use fhir_sdk::r4b::{codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::{Identifier, Reference}};
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite, types::Uuid};
-use tracing::{debug, error};
+use tracing::{trace, debug, error};
 
 use crate::{config::Ttp, fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG};
 
@@ -43,7 +43,7 @@ trait AddIdRequestExt: Sized {
 impl AddIdRequestExt for Patient {
     fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
         let request = Identifier::builder()
-            .r#use(IdentifierUse::Temp)
+            .r#use(IdentifierUse::Secondary)
             .system(id)
             .build()
             .map_err(|err| {
@@ -94,9 +94,9 @@ pub async fn create_data_request(
           .add_id_request(CONFIG.exchange_id_system.clone())?
           .add_id_request(ttp.project_id_system.clone())?;
         patient = request_project_pseudonym(&mut patient, &ttp).await?;
-        debug!("TTP Returned these patient with project pseudonym {:#?}", &patient);
+        trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         consent = document_patient_consent(consent, &patient, &ttp).await?;
-        debug!("TTP returned this consent for Patient {:?}", consent);
+        trace!("TTP returned this consent for Patient {:?}", consent);
     } else {
         // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
         if !contains_exchange_identifier(&patient) {
@@ -106,6 +106,7 @@ pub async fn create_data_request(
         }
     }
     patient = patient.pseudonymize()?;
+    consent = link_patient_consent(&consent, &patient)?;
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
     let data_request_id = post_data_request(&CONFIG.fhir_request_url, &CONFIG.fhir_request_credentials, patient, consent).await?;
 
@@ -182,6 +183,22 @@ async fn validate_data_request(patient: &Patient, ttp: &Ttp) -> Result<(), (Stat
     } else {
         Ok(())
     }
+}
+
+fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
+    let mut linked_consent = consent.clone();
+    let exchange_identifier= get_exchange_identifier(patient);
+    let Some(exchange_identifier) = exchange_identifier else {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
+    };
+    linked_consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
+    Ok(linked_consent)
+}
+
+fn get_exchange_identifier(patient: &Patient) -> Option<&Identifier> {
+    patient.identifier().into_iter().flatten().find(
+        |x| x.system.as_ref() == Some(&CONFIG.exchange_id_system)
+    )
 }
 
 fn contains_exchange_identifier(patient: &Patient) -> bool {

@@ -15,17 +15,17 @@ pub struct Config {
     pub database_url: Url,
     // Definition of the fhir server and credentials used for communicating data requests to the dic
     #[clap(long, env)]
-    pub fhir_request_url: String,
+    pub fhir_request_url: Url,
     #[clap(long, env)]
     pub fhir_request_credentials: String,
     // Definition of the fhir server and credentials used for reading data from the dic
     #[clap(long, env)]
-    pub fhir_input_url: String,
+    pub fhir_input_url: Url,
     #[clap(long, env)]
     pub fhir_input_credentials: String,
     // Definition of the fhir server and credentials used for adding data to the project data
     #[clap(long, env)]
-    pub fhir_output_url: String,
+    pub fhir_output_url: Url,
     #[clap(long, env)]
     pub fhir_output_credentials: String,
 }
