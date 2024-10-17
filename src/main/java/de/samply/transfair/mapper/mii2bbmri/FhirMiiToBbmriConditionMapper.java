@@ -86,7 +86,15 @@ public class FhirMiiToBbmriConditionMapper extends FhirMiiToBbmriMapper {
       out.setMeta(new Meta().addProfile(BBMRI_PROFILE_DIAGNOSE));
 
       out.getCode().getCodingFirstRep().setSystem(ICD_SYSTEM);
-      out.getCode().getCodingFirstRep().setCode(in.getCode().getCodingFirstRep().getCode()); //FIXME map ICD10GM to ICD10WHO
+
+      if(in.getCode().getCodingFirstRep().getSystem().equals("http://snomed.info/sct")) {
+        log.warn("Please install snomedct2icd Addon");
+        return List.of();
+      }
+
+      if(in.getCode().getCodingFirstRep().getSystem().equals("http://fhir.de/CodeSystem/bfarm/icd-10-gm")) {
+        out.getCode().getCodingFirstRep().setCode(in.getCode().getCodingFirstRep().getCode()); //FIXME map ICD10GM to ICD10WHO
+      }
 
       return List.of(out);
     } else {

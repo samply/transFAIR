@@ -15,12 +15,17 @@ public class FhirProperties {
   @Data
   public static class FhirInput {
     private String url;
+    private String username;
+    private String password;
+    private boolean ssl;
   }
   @Data
   public static class FhirOutput {
     private String url;
+    private String username;
+    private String password;
+    private boolean ssl;
   }
-
 }
 
 

@@ -1,32 +1,23 @@
 package de.samply.transfair.mapper.bbmri2beacon;
 
-import de.samply.transfair.mapper.bbmri2beacon.BbmriBeaconAddressConverter;
-import de.samply.transfair.mapper.bbmri2beacon.BbmriBeaconSexConverter;
 import de.samply.transfair.models.beacon.BeaconGeographicOrigin;
 import de.samply.transfair.models.beacon.BeaconIndividual;
 import de.samply.transfair.models.beacon.BeaconIndividuals;
 import de.samply.transfair.models.beacon.BeaconMeasure;
-import de.samply.transfair.writer.BeaconMongoSaver;
-import lombok.extern.slf4j.Slf4j;
-import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
-import org.hl7.fhir.r4.model.Resource;
-import org.hl7.fhir.instance.model.api.IBaseResource;
-import org.hl7.fhir.r4.model.Address;
-import org.hl7.fhir.r4.model.BaseDateTimeType;
-import org.hl7.fhir.r4.model.Coding;
-import org.hl7.fhir.r4.model.Observation;
-import org.hl7.fhir.r4.model.Patient;
-import org.hl7.fhir.r4.model.StringType;
-
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import lombok.extern.slf4j.Slf4j;
+import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r4.model.Address;
+import org.hl7.fhir.r4.model.BaseDateTimeType;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.Resource;
+import org.hl7.fhir.r4.model.StringType;
 
 /**
  * This mapping transfers patient-related data from one blaze with bbmri to an
@@ -46,8 +37,7 @@ public class Bbmri2BeaconIndividual {
     int patientCount = 0;
     for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
       Resource resource = entry.getResource();
-      if (resource instanceof Patient) {
-        Patient patient = (Patient) resource;
+      if (resource instanceof Patient patient) {
         String patientId = transferId(patient);
         beaconIndividuals.add(transferIndividual(patient));
         patientCount++;
@@ -174,9 +164,9 @@ public class Bbmri2BeaconIndividual {
       log.warn("getEffective returns null for observation " + id);
     } else {
       BaseDateTimeType dataTimeType = observation.getEffectiveDateTimeType().dateTimeValue();
-      int y = dataTimeType.getYear().intValue();
-      int m = dataTimeType.getMonth().intValue() + 1; // FHIR months start at 0!
-      int d = dataTimeType.getDay().intValue();
+      int y = dataTimeType.getYear();
+      int m = dataTimeType.getMonth() + 1; // FHIR months start at 0!
+      int d = dataTimeType.getDay();
       effectiveDateTime = LocalDate.of(y, m, d).toString();
     }
     List<Coding> codings = observation.getCode().getCoding();

@@ -1,8 +1,14 @@
 fhir:
   input:
     url: ${FHIR_INPUT_URL:http://localhost:8080/fhir}
+    username: ${FHIR_INPUT_USERNAME}
+    password: ${FHIR_INPUT_PASSWORD}
+    ssl: ${FHIR_INPUT_SSL:true}
   output:
     url: ${FHIR_OUTPUT_URL:http://localhost:8090/fhir}
+    username: ${FHIR_OUTPUT_USERNAME}
+    password: ${FHIR_OUTPUT_PASSWORD}
+    ssl: ${FHIR_OUTPUT_SSL:true}
 beacon:
   mongoHost: ${MONGO_HOST:mongo}
   mongoPort: ${MONGO_PORT:27017}

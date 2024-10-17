@@ -5,19 +5,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
-import org.hl7.fhir.r4.model.Condition;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.Meta;
-import org.hl7.fhir.r4.model.Quantity;
 import org.hl7.fhir.r4.model.Range;
-import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.Specimen;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
@@ -32,14 +28,34 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
   private static final String ICD_O_3_SYSTEM = "http://terminology.hl7.org/CodeSystem/icd-o-3";
   private static final String DERIVATIVE_OTHER = "derivative-other"; 
 
-  private static final Map<Pair<Integer, Integer>, String> storageTemperatureMiiToBbmri = Map.ofEntries(
-      Map.entry(Pair.of(2 , 10), "temperature2to10"), 
-      Map.entry(Pair.of(-35 , -18), "temperature-18to-35"), 
-      Map.entry(Pair.of(-85 , -60), "temperature-60to-85"), 
-      Map.entry(Pair.of(-195 , -160), "temperatureGN"), 
-      Map.entry(Pair.of(-209 , -196), "temperatureLN"), 
-      Map.entry(Pair.of(11 , 30), "temperatureRoom")
-      );
+  private static String storageTemperatureMiiToBbmri(Pair<Integer, Integer> limit)
+  {
+    if (limit.getLeft() >= 2 && limit.getRight() <= 10) {
+      return "temperature2to10";
+    }
+
+    if (limit.getLeft() >= 11 && limit.getRight() <= 30) {
+      return "temperatureRoom";
+    }
+
+    if (limit.getLeft() >= -35 && limit.getRight() <= -18) {
+      return "temperature-18to-35";
+    }
+
+    if (limit.getLeft() >= -85 && limit.getRight() <= -60) {
+      return "temperature-60to-85";
+    }
+
+    if (limit.getLeft() >= -86 && limit.getRight() <= -195) {
+      return "temperatureGN";
+    }
+
+    if (limit.getLeft() >= -196 && limit.getRight() <= -210) {
+      return "temperatureLN";
+    }
+
+    return "";
+  }
 
   public FhirMiiToBbmriSpecimenMapper(
       HashMap<String, String> icd10Snomed, HashMap<String, String> snomedSampleType) {
@@ -77,9 +93,11 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
       return Collections.emptyList();
     }
 
-    Specimen out = in.copy(); 
-    out.setExtension(null);
-    out.getCollection().setExtension(null);
+    Specimen out = new Specimen();
+    out.setId(in.getId());
+    out.setSubject(in.getSubject());
+
+    out.setCollection(in.getCollection());
 
     List<Resource> resources = new ArrayList<>();
 
@@ -89,9 +107,8 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
 
       out.setMeta(new Meta().addProfile(BBMRI_SPECIMEN_PROFILE));
 
-      Coding bodySite = new Coding();
-
-      if ((in.getCollection() != null) && (in.getCollection().getBodySite() != null) ) {
+      if ((!in.getCollection().getBodySite().getCoding().isEmpty())) {
+        Coding bodySite = new Coding();
         bodySite.setCode(in.getCollection().getBodySite().getCodingFirstRep().getCode());
         bodySite.setSystem(ICD_O_3_SYSTEM);
         out.getCollection().getBodySite().setCoding(List.of(bodySite));
@@ -104,9 +121,9 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
           case MII_TEMPERATURBEDINGUNGEN:
             Range temperatureRange = (Range) processingExtension.getValue();
             Pair<Integer, Integer> limits = Pair.of(temperatureRange.getLow().getValue().intValue(), temperatureRange.getHigh().getValue().intValue());
-            String storageTemperature =  storageTemperatureMiiToBbmri.get(limits);
+            String storageTemperature =  storageTemperatureMiiToBbmri(limits);
 
-            if (storageTemperature != null) {
+            if (!storageTemperature.isEmpty()) {
               Extension extensionTemperature = new Extension();
               extensionTemperature.setUrl(BBMRI_STORAGE_TEMPERATURE);
               CodeableConcept codeableConceptTemperature = new CodeableConcept();
@@ -129,7 +146,7 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
             Extension extensionCustodian = new Extension();
             extensionCustodian.setUrl(BBMRI_CUSTODIAN);
             extensionCustodian.setValue(extension.getValue());
-            out.addExtension(extensionCustodian); 
+            out.addExtension(extensionCustodian);
             break;
           default:
             break;
