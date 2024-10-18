@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.hl7.fhir.r4.model.CodeableConcept;
@@ -42,19 +41,19 @@ public class FhirMiiToBbmriSpecimenMapper extends FhirMiiToBbmriMapper {
       return "temperature-18to-35";
     }
 
-    if (limit.getLeft() >= -85 && limit.getRight() <= -60) {
+    if (limit.getLeft() >= -60 && limit.getRight() <= -85) {
       return "temperature-60to-85";
     }
 
-    if (limit.getLeft() >= -86 && limit.getRight() <= -195) {
+    if (limit.getLeft() >= -195 && limit.getRight() <= -86) {
       return "temperatureGN";
     }
 
-    if (limit.getLeft() >= -196 && limit.getRight() <= -210) {
+    if (limit.getLeft() >= -210 && limit.getRight() <= -196) {
       return "temperatureLN";
     }
 
-    return "";
+    return "temperatureOther";
   }
 
   public FhirMiiToBbmriSpecimenMapper(
