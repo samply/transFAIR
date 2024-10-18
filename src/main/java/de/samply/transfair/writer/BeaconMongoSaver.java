@@ -1,24 +1,26 @@
 package de.samply.transfair.writer;
 
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientURI;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import com.mongodb.client.model.BulkWriteOptions;
-import com.mongodb.client.model.Indexes;
-import com.mongodb.client.model.InsertOneModel;
+//import com.mongodb.client.MongoClient;
+//import com.mongodb.client.MongoClients;
+//import com.mongodb.client.MongoCollection;
+//import com.mongodb.client.MongoDatabase;
+//import com.mongodb.client.model.BulkWriteOptions;
+//import com.mongodb.client.model.Indexes;
+//import com.mongodb.client.model.InsertOneModel;
 import de.samply.transfair.util.JsonSerializer;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
+//import org.bson.Document;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Export objects to MongoDB.
  */
 @Slf4j
+@Profile("bbmri2beacon")
 public class BeaconMongoSaver {
   private static final String MONGO_DB = "beacon";
   private static final int BATCH_SIZE = 100;
@@ -41,8 +43,8 @@ public class BeaconMongoSaver {
                             String mongoUser,
                             String mongoPass) {
     String mongoUri = createMongoUri(mongoHost, mongoPort, mongoUser, mongoPass);
-    try (MongoClient client = new MongoClient(new MongoClientURI(mongoUri))) {
-      MongoDatabase database = client.getDatabase(MONGO_DB);
+/*    try (MongoClient mongoClient = MongoClients.create(mongoUri)) {
+      MongoDatabase database = mongoClient.getDatabase(MONGO_DB);
       MongoCollection<Document> collection = database.getCollection(collectionName);
       collection.drop(); // Clean out any existing collection
       List<String> dataList = JsonSerializer.toJsonList(data);
@@ -65,7 +67,7 @@ public class BeaconMongoSaver {
       log.info("dataList size " + dataList.size());
       log.info("Number of records inserted " + recordCount);
       collection.createIndex(Indexes.ascending("$**")); // Wildcard index.
-    }
+    }*/
   }
 
   /**

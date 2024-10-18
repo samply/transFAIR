@@ -67,12 +67,6 @@
 			<version>${hapi.version}</version>
 		</dependency>
 
-		<dependency>
-			<groupId>org.mongodb</groupId>
-			<artifactId>mongo-java-driver</artifactId>
-			<version>3.12.14</version>
-		</dependency>
-
 		<!-- Dependencies for DICOM import -->
 		<dependency>
 			<groupId>org.dcm4che</groupId>

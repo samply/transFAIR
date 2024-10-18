@@ -1,21 +1,52 @@
 package de.samply.transfair;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.util.HashMap;
-
+import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.client.api.IClientInterceptor;
+import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
+import de.samply.transfair.mapper.FhirResourceMapper;
 import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
-import de.samply.transfair.processor.BbmriBundleToBeaconIndividualProcessor;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiConditionMapper;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiObservationMapper;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiOrganizationMapper;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiPatientMapper;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiResourceMapper;
+import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiSpecimenMapper;
+import de.samply.transfair.mapper.copy.FhirCopyResourceMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriConditionMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriObservationMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriOrganizationMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriPatientMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriResourceMapper;
+import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriSpecimenMapper;
+import de.samply.transfair.models.beacon.BeaconBiosamples;
+import de.samply.transfair.models.beacon.BeaconIndividuals;
 import de.samply.transfair.processor.BbmriBundleToBeaconBiosampleProcessor;
+import de.samply.transfair.processor.BbmriBundleToBeaconIndividualProcessor;
+import de.samply.transfair.processor.FhirBundleProcessor;
+import de.samply.transfair.reader.FhirAmrReader;
 import de.samply.transfair.reader.FhirConditionReader;
 import de.samply.transfair.reader.FhirImagingStudyReader;
 import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
 import de.samply.transfair.reader.FhirPatientReader;
 import de.samply.transfair.reader.FhirSpecimenReader;
-import de.samply.transfair.reader.FhirAmrReader;
-import de.samply.transfair.writer.BeaconIndividualWriter;
 import de.samply.transfair.writer.BeaconBiosampleWriter;
+import de.samply.transfair.writer.BeaconIndividualWriter;
+import de.samply.transfair.writer.FhirBundleWriter;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.security.KeyStore;
+import java.util.HashMap;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.ConceptMap;
 import org.springframework.batch.core.Job;
@@ -32,26 +63,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.transaction.PlatformTransactionManager;
-import ca.uhn.fhir.context.FhirContext;
-import de.samply.transfair.mapper.FhirResourceMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiConditionMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiObservationMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiOrganizationMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiPatientMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiResourceMapper;
-import de.samply.transfair.mapper.bbmri2mii.FhirBbmriToMiiSpecimenMapper;
-import de.samply.transfair.mapper.copy.FhirCopyResourceMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriConditionMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriObservationMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriOrganizationMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriPatientMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriResourceMapper;
-import de.samply.transfair.mapper.mii2bbmri.FhirMiiToBbmriSpecimenMapper;
-import de.samply.transfair.processor.FhirBundleProcessor;
-import de.samply.transfair.writer.FhirBundleWriter;
-import de.samply.transfair.models.beacon.BeaconIndividuals;
-import de.samply.transfair.models.beacon.BeaconBiosamples;
-import lombok.extern.slf4j.Slf4j;
 
 @Configuration
 @Slf4j
@@ -138,39 +149,85 @@ public class BatchConfiguration {
     return new FhirCopyResourceMapper();
   }
 
+  IGenericClient createFhirClient(String url, String username, String password, boolean ssl) {
+    if (!ssl) {
+      try {
+        KeyStore truststore = null;
+        SSLContext sslContext =
+            SSLContexts.custom()
+                .loadTrustMaterial(truststore, new TrustSelfSignedStrategy())
+                .build();
+
+        HostnameVerifier hostnameVerifier = NoopHostnameVerifier.INSTANCE;
+        SSLConnectionSocketFactory sslFactory =
+            new SSLConnectionSocketFactory(sslContext, hostnameVerifier);
+
+        CloseableHttpClient httpClient =
+            HttpClients.custom().setSSLSocketFactory(sslFactory).build();
+        ctx.getRestfulClientFactory().setHttpClient(httpClient);
+        log.info("Disable SSL checking");
+      } catch (Exception e) {
+        log.info(e.getMessage());
+      }
+    }
+
+    IGenericClient client = ctx.newRestfulGenericClient(url);
+
+    if (!fhirProperties.input.getPassword().isEmpty()) {
+      IClientInterceptor authInterceptor = new BasicAuthInterceptor(username, password);
+      client.registerInterceptor(authInterceptor);
+    }
+
+    return client;
+  }
+
   @Bean
   public ItemReader<Bundle> organizationReader() {
-    return new FhirOrganizationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirOrganizationReader(createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl()));
   }
 
   @Bean
   public ItemReader<Bundle> conditionReader() {
-    return new FhirConditionReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirConditionReader(createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl()));
   }
 
   @Bean
   public ItemReader<Bundle> observationReader() {
-    return new FhirObservationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirObservationReader(createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl()));
   }
 
   @Bean
   public ItemReader<Bundle> specimenReader() {
-    return new FhirSpecimenReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirSpecimenReader(createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl()));
   }
 
   @Bean
   public ItemReader<Bundle> patientReader() {
-    return new FhirPatientReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirPatientReader((createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl())));
   }
 
   @Bean
   public ItemReader<Bundle> imagingStudyReader() {
-    return new FhirImagingStudyReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirImagingStudyReader((createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl())));
   }
 
   @Bean
   public ItemReader<Bundle> amrReader() {
-    return new FhirAmrReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+    return new FhirAmrReader(createFhirClient(fhirProperties.getInput().getUrl(),
+        fhirProperties.getInput().getUsername(), fhirProperties.getInput().getPassword(),
+        fhirProperties.getInput().isSsl()));
   }
 
 
@@ -193,7 +250,9 @@ public class BatchConfiguration {
   @Bean
   @StepScope
   public ItemWriter<Bundle> writer() {
-    return new FhirBundleWriter(ctx.newRestfulGenericClient(fhirProperties.getOutput().getUrl()));
+    return new FhirBundleWriter(createFhirClient(fhirProperties.getOutput().getUrl(),
+        fhirProperties.getOutput().getUsername(), fhirProperties.getOutput().getPassword(),
+        fhirProperties.getOutput().isSsl()));
   }
 
   @Bean

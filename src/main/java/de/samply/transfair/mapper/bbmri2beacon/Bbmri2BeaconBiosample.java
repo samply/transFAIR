@@ -1,17 +1,11 @@
 package de.samply.transfair.mapper.bbmri2beacon;
 
-import de.samply.transfair.mapper.bbmri2beacon.BbmriBeaconTypeConverter;
 import de.samply.transfair.models.beacon.BeaconBiosample;
 import de.samply.transfair.models.beacon.BeaconBiosamples;
 import de.samply.transfair.models.beacon.BeaconSampleInfo;
 import de.samply.transfair.models.beacon.BeaconSampleOriginType;
-import de.samply.transfair.writer.BeaconMongoSaver;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.CodeableConcept;

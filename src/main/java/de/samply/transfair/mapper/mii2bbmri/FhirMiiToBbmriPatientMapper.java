@@ -8,7 +8,7 @@ import org.hl7.fhir.r4.model.Resource;
 
 public class FhirMiiToBbmriPatientMapper extends FhirMiiToBbmriMapper {
 
-  private static final String BBMRI_PROFILE_PATIENT = "https://fhir.simplifier.net/bbmri.de/StructureDefinition/Patient";
+  private static final String BBMRI_PROFILE_PATIENT = "https://fhir.bbmri.de/StructureDefinition/Patient";
 
   public FhirMiiToBbmriPatientMapper(
       HashMap<String, String> icd10Snomed, HashMap<String, String> snomedSampleType) {
@@ -19,8 +19,18 @@ public class FhirMiiToBbmriPatientMapper extends FhirMiiToBbmriMapper {
 
 
     Patient in = (Patient) resource;
-    Patient out = in.copy();
+    Patient out = new Patient();
 
+    out.setId(in.getId());
+
+    //Copy Birthday
+    out.setBirthDate(in.getBirthDate());
+
+    //Map Gender
+    out.setGender(in.getGender());
+
+    //Map deceased
+    out.setDeceased(in.getDeceased());
 
     out.setMeta(new Meta().addProfile(BBMRI_PROFILE_PATIENT));
 

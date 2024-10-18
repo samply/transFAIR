@@ -6,12 +6,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 
 /**
  * This mapping transfers patient-related data from one blaze with bbmri to an
  * biosamples.json file.
  */
 @Slf4j
+@Profile("bbmri2beacon")
 public class BeaconBiosampleWriter implements ItemWriter<BeaconBiosamples> {
   private static final String COLLECTION_NAME = "biosamples";
   @Value("${data.outputFileDirectory}")
