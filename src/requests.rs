@@ -3,12 +3,12 @@ use axum::{extract::{Path, State}, Json};
 use fhir_sdk::r4b::{codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::{Identifier, Reference}};
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
-use sqlx::{Pool, Sqlite, types::Uuid};
+use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
 use crate::{config::Ttp, fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG};
 
-#[derive(Serialize, sqlx::Type)]
+#[derive(Serialize, Deserialize, sqlx::Type)]
 // #[repr(i8)]
 pub enum RequestStatus {
     Created = 1,
@@ -17,10 +17,10 @@ pub enum RequestStatus {
     Error = 4,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
 pub struct DataRequest {
-    id: String,
-    status: RequestStatus,
+    pub id: String,
+    pub status: RequestStatus,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -84,7 +84,7 @@ impl PseudonymizableExt for Patient {
 pub async fn create_data_request(
     State(database_pool): State<Pool<Sqlite>>,
     Json(payload): Json<DataRequestPayload>
-) -> axum::response::Result<Json<DataRequest>> {
+) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let mut consent = payload.consent;
     let mut patient = payload.patient;
     if let Some(ttp) = &CONFIG.ttp {
@@ -111,7 +111,7 @@ pub async fn create_data_request(
     let data_request_id = post_data_request(&CONFIG.fhir_request_url, &CONFIG.fhir_request_credentials, patient, consent).await?;
 
     let data_request = DataRequest {
-        id: data_request_id,
+        id: dbg!(data_request_id),
         status: RequestStatus::Created,
     };
 
@@ -126,7 +126,7 @@ pub async fn create_data_request(
     let last_insert_rowid = sqlite_query_result.last_insert_rowid();
     debug!("Inserted data request in row {}", last_insert_rowid);
 
-    Ok(Json(data_request))
+    Ok((StatusCode::CREATED, Json(data_request)))
 }
 
 // GET /requests; Lists all running Data Requests
@@ -135,7 +135,7 @@ pub async fn list_data_requests(
 ) -> Result<Json<Vec<DataRequest>>, (StatusCode, &'static str)> {
     let data_requests = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id as "id: uuid::Uuid", status as "status: _" FROM data_requests;"#,
+        r#"SELECT id, status as "status: _" FROM data_requests;"#,
     ).fetch_all(&database_pool).await.map_err(|e| {
        error!("Unable to fetch data requests from database: {}", e); 
        (StatusCode::INTERNAL_SERVER_ERROR, "Unable to fetch data requests from database!")
@@ -146,12 +146,12 @@ pub async fn list_data_requests(
 // GET /requests/<request-id>; Gets the Request specified by id in Path
 pub async fn get_data_request(
     State(database_pool): State<Pool<Sqlite>>,
-    Path(request_id): Path<Uuid>
+    Path(request_id): Path<String>
 ) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
     debug!("Information on data request {} requested.", request_id);
     let data_request = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id as "id: uuid::Uuid", status as "status: _" FROM data_requests WHERE id = $1;"#,
+        r#"SELECT id, status as "status: _" FROM data_requests WHERE id = $1;"#,
         request_id
     ).fetch_optional(&database_pool).await.map_err(|e| {
         error!("Unable to fetch data request {} from database: {}", request_id, e);

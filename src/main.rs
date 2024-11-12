@@ -111,3 +111,40 @@ async fn fetch_data() -> Result<String, String> {
     }
     Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }
+
+#[cfg(test)]
+mod tests {
+    use reqwest::StatusCode;
+
+    use crate::requests::DataRequest;
+
+    async fn post_data_request() -> DataRequest {
+        let json = include_bytes!("../docs/examples/data_request.json");
+        let response = reqwest::Client::new()
+            .post(format!("http://localhost:8080/requests"))
+            .json(&serde_json::from_slice::<serde_json::Value>(json).unwrap())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        response.json().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn get_data_request() {
+        let data_request = post_data_request().await;
+        let response = reqwest::Client::new()
+            .get(format!("http://localhost:8080/requests/{}", dbg!(data_request.id)))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    async fn fetch_data() {
+        todo!()
+    }
+    
+}
