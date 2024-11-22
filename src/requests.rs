@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{config::Ttp, fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent, get_supported_ids}, CONFIG};
+use crate::{fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent}, CONFIG};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 // #[repr(i8)]
@@ -88,8 +88,6 @@ pub async fn create_data_request(
     let mut consent = payload.consent;
     let mut patient = payload.patient;
     if let Some(ttp) = &CONFIG.ttp {
-        // TODO: Maybe change that check, so that we check if the configuration of routine connector is right and here only that the request is really allowed
-        validate_data_request(&patient, &ttp).await?;
         patient = patient
           .add_id_request(CONFIG.exchange_id_system.clone())?
           .add_id_request(ttp.project_id_system.clone())?;
@@ -160,28 +158,6 @@ pub async fn get_data_request(
     match data_request {
         Some(data_request) => Ok(Json(data_request)),
         None => Err((StatusCode::NOT_FOUND, "Couldn't retrieve data request with id"))
-    }
-}
-
-async fn validate_data_request(patient: &Patient, ttp: &Ttp) -> Result<(), (StatusCode, &'static str)>  {
-    let ttp_supported_ids = get_supported_ids(&ttp).await?;
-    let are_ids_supported = patient.identifier
-            .iter()
-            .flatten()
-            .all(|identifier| {
-                ttp_supported_ids
-                .iter()
-                .any(|supported| 
-                    identifier.system.clone()
-                    .ok_or(
-                        (StatusCode::BAD_REQUEST, "Supplied identifier in request did not contain a system!")
-                    )
-                    .unwrap().eq(supported))
-            });
-    if ! are_ids_supported {
-        Err((StatusCode::BAD_REQUEST, "The TTP doesn't support one of the requested id types."))
-    } else {
-        Ok(())
     }
 }
 

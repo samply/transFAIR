@@ -2,9 +2,9 @@
 use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{trace, debug, warn};
+use tracing::{debug, trace, warn};
 
-use crate::{config::Ttp, CheckAvailability};
+use crate::{config::Ttp, CheckAvailability, CheckIdTypeAvailable};
 
 impl CheckAvailability for Ttp {
     async fn check_availability(&self) -> bool {
@@ -24,6 +24,23 @@ impl CheckAvailability for Ttp {
             return false;
         }
         true               
+    }
+}
+
+impl CheckIdTypeAvailable for Ttp {
+    async fn check_idtype_available(&self, idtype: &str) -> bool {
+        let ttp_supported_ids = match get_supported_ids(&self)
+            .await
+            {
+                Ok(idtypes) => idtypes,
+                Err(err) => {
+                    debug!("Error fetching supported id types from ttp: {:?}", err);
+                    return false
+                }
+            };
+        ttp_supported_ids.into_iter().any(
+            |x| x == idtype
+        )
     }
 }
 

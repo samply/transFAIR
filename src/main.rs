@@ -25,6 +25,10 @@ trait CheckAvailability {
     async fn check_availability(&self) -> bool;
 }
 
+trait CheckIdTypeAvailable {
+    async fn check_idtype_available(&self, idtype: &str) -> bool;
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     tracing_subscriber::FmtSubscriber::builder()
@@ -62,7 +66,13 @@ async fn main() -> ExitCode {
             );
         }
         info!("Connected to ttp {}", ttp.url);
-        // TODO: Check that the TTP provides CONFIG.ttp.project_id_system and CONFIG.exchange_id_system, otherwise refuse to start
+        // verify that both, the exchange id system and project id system are configured in the ttp
+        for idtype in [&CONFIG.exchange_id_system, &ttp.project_id_system] {
+            if !(ttp.check_idtype_available(&idtype).await) {
+                error!("Configured exchange id system is not available in TTP: expected {}", &idtype);
+                return ExitCode::from(1)
+            }
+        }
     }
 
     tokio::spawn(async move {
