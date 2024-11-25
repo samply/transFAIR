@@ -1,7 +1,57 @@
 use chrono::NaiveDate;
-use fhir_sdk::r4b::resources::{Bundle, BundleEntry, BundleEntryRequest, Consent, Patient, Resource};
+use fhir_sdk::r4b::{resources::{Bundle, BundleEntry, BundleEntryRequest, Consent, Patient, Resource}, codes::IdentifierUse, types::Identifier};
 use reqwest::{header, StatusCode, Url};
 use tracing::{debug, error, warn};
+
+use crate::{requests::{LinkableExt, PseudonymizableExt}, CONFIG};
+
+impl LinkableExt for Patient {
+    fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
+        let request = Identifier::builder()
+            .r#use(IdentifierUse::Secondary)
+            .system(id)
+            .build()
+            .map_err(|err| {
+                // TODO: Ensure that this will be a fatal error, as otherwise the linkage will not be possible
+                error!("Unable to add token request to data request. See error message: {}", err);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Unable to add token request to data request")
+            })
+            .unwrap();
+        self.identifier.push(Some(request));
+        Ok(self)
+    }
+
+    fn get_exchange_identifier(&self) -> Option<&Identifier> {
+       self.identifier.iter().flatten().find(
+           |x| x.system.as_ref() == Some(&CONFIG.exchange_id_system)
+       )
+    }
+
+    fn contains_exchange_identifier(&self) -> bool {
+        self.identifier.iter().flatten().any(
+            |x| x.system.as_ref() == Some(&CONFIG.exchange_id_system)
+        )
+    }
+}
+
+impl PseudonymizableExt for Patient {
+    fn pseudonymize(self) -> axum::response::Result<Self> {
+        let id = self.id.clone().unwrap();
+        let exchange_identifier_pos = self.identifier.iter().position(
+            |x| x.clone().is_some_and(|y| y.system == Some(CONFIG.exchange_id_system.clone()))
+        ).unwrap();
+        let exchange_identifier  = self.identifier.get(exchange_identifier_pos).cloned();
+        let pseudonymized_patient = Patient::builder()
+            .id(id)
+            .identifier(vec![
+                exchange_identifier.unwrap()
+            ])
+            .build()
+            .map_err(|err|
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Unable to create pseudonymized patient object {}", err)))?;
+        Ok(pseudonymized_patient)
+    }
+}
 
 pub async fn post_data_request(
     fhir_endpoint: &Url,
