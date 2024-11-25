@@ -1,6 +1,6 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::{Identifier, Reference}};
+use fhir_sdk::r4b::{resources::{Consent, Patient}, types::{Identifier, Reference}};
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
@@ -9,7 +9,6 @@ use tracing::{trace, debug, error};
 use crate::{fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent}, CONFIG};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
-// #[repr(i8)]
 pub enum RequestStatus {
     Created = 1,
     _DataLoaded = 2,
@@ -24,60 +23,19 @@ pub struct DataRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Name {
-    pub family: String,
-    pub given: String,
-    pub prefix: Vec<String>
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct DataRequestPayload {
     pub patient: Patient,
     pub consent: Consent
 }
 
-trait AddIdRequestExt: Sized {
+pub trait LinkableExt: Sized {
     fn add_id_request(self, id: String) -> axum::response::Result<Self>;
+    fn get_exchange_identifier(&self) -> Option<&Identifier>;
+    fn contains_exchange_identifier(&self) -> bool;
 }
 
-impl AddIdRequestExt for Patient {
-    fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
-        let request = Identifier::builder()
-            .r#use(IdentifierUse::Secondary)
-            .system(id)
-            .build()
-            .map_err(|err| {
-                // TODO: Ensure that this will be a fatal error, as otherwise the linkage will not be possible
-                error!("Unable to add token request to data request. See error message: {}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Unable to add token request to data request")
-            })
-            .unwrap();
-        self.identifier.push(Some(request));
-        Ok(self)
-    }
-}
-
-trait PseudonymizableExt: Sized {
+pub trait PseudonymizableExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
-}
-
-impl PseudonymizableExt for Patient {
-    fn pseudonymize(self) -> axum::response::Result<Self> {
-        let id = self.id.clone().unwrap();
-        let exchange_identifier_pos = self.identifier().iter().position(
-            |x| x.clone().is_some_and(|y| y.system == Some(CONFIG.exchange_id_system.clone()))
-        ).unwrap();
-        let exchange_identifier  = self.identifier().get(exchange_identifier_pos).cloned();
-        let pseudonymized_patient = Patient::builder()
-            .id(id)
-            .identifier(vec![
-                exchange_identifier.unwrap()
-            ])
-            .build()
-            .map_err(|err| 
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Unable to create pseudonymized patient object {}", err)))?;
-        Ok(pseudonymized_patient)
-    }
 }
 
 // POST /requests; Creates a new Data Request
@@ -97,7 +55,7 @@ pub async fn create_data_request(
         trace!("TTP returned this consent for Patient {:?}", consent);
     } else {
         // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
-        if !contains_exchange_identifier(&patient) {
+        if !patient.contains_exchange_identifier() {
             return Err(
                 (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &CONFIG.exchange_id_system)).into()
             );
@@ -163,22 +121,10 @@ pub async fn get_data_request(
 
 fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
     let mut linked_consent = consent.clone();
-    let exchange_identifier= get_exchange_identifier(patient);
+    let exchange_identifier= patient.get_exchange_identifier();
     let Some(exchange_identifier) = exchange_identifier else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
     };
     linked_consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
     Ok(linked_consent)
-}
-
-fn get_exchange_identifier(patient: &Patient) -> Option<&Identifier> {
-    patient.identifier().into_iter().flatten().find(
-        |x| x.system.as_ref() == Some(&CONFIG.exchange_id_system)
-    )
-}
-
-fn contains_exchange_identifier(patient: &Patient) -> bool {
-    patient.identifier().into_iter().flatten().any(
-        |x| x.system.as_ref() == Some(&CONFIG.exchange_id_system)
-    )
 }
