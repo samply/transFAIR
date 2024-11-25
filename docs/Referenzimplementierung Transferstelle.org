@@ -22,7 +22,7 @@ In diesem Schritt werden von der Datentransferstelle die angeforderten Daten ber
 In der Produktion muss sich die Transferstelle merken, wann die letzte Anfrage stattgefunden hat. In diesem Beispiel wird davon ausgegangen, das die letzte Anfrage im Jahr 2023 stattgefunden hat, daher nehmen wir den[2024-01-01 Mon] als Anfangs Datum.
 #+NAME: consents-from-inbox
 #+begin_src restclient :var last-request-date="2024-01-01" :results value
-POST :CONSENT_FHIR_INTERFACE/Consent/_search
+POST :CONSENT_FHIR_INTERFACE/Patient/_search
 Content-Type: application/x-www-form-urlencoded
 
 lastUpdated=gt(:last-request-date)
