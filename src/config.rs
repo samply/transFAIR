@@ -1,40 +1,43 @@
-use std::str::FromStr;
-
-use clap::Parser;
+use clap::{Parser, Args};
 use reqwest::Url;
-use serde::Deserialize;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Config {
-    #[clap(long, env)]
-    pub institute_ttp_url: Url,
-    #[clap(long, env)]
-    pub institute_ttp_api_key: String,
+    // Definition of necessary parameters for communicating with a ttp
+    #[clap(flatten)]
+    pub ttp: Option<Ttp>,
+    // Either an id well-known to both, project and dic, or a temporary identifier created by the ttp
+    #[clap(long, env, default_value = "TOKEN")]
+    pub exchange_id_system: String,
+    // Definition of the URL to use for the database, this is set Environment (see flake.nix) as sqlx expects this env variable
     #[clap(long, env)]
     pub database_url: Url,
-    // NOTE: You can't pass multiple projects through environment, only through args like
-    // cargo run -- --projects '<project_1>' '<project_2>'
-    #[clap(long, env, num_args = 1, value_delimiter=';', required = true)]
-    pub projects: Vec<ProjectConfig>,
+    // Definition of the fhir server and credentials used for communicating data requests to the dic
+    #[clap(long, env)]
+    pub fhir_request_url: Url,
+    #[clap(long, env)]
+    pub fhir_request_credentials: String,
+    // Definition of the fhir server and credentials used for reading data from the dic
+    #[clap(long, env)]
+    pub fhir_input_url: Url,
+    #[clap(long, env)]
+    pub fhir_input_credentials: String,
+    // Definition of the fhir server and credentials used for adding data to the project data
+    #[clap(long, env)]
+    pub fhir_output_url: Url,
+    #[clap(long, env)]
+    pub fhir_output_credentials: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct ProjectConfig {
-    pub consent_fhir_url: String,
-    pub consent_fhir_api_key: String,
-    pub mdat_fhir_url: String,
-    pub mdat_fhir_api_key: String,
-    pub project_fhir_url: String,
-    pub project_fhir_api_key: String,
-}
-
-impl FromStr for ProjectConfig {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let res: ProjectConfig =
-            serde_json::from_str(s).map_err(|e| format!("error parsing project: {}", e))?;
-        Ok(res)
-    }
+#[derive(Args, Clone, Debug)]
+#[group(requires = "url", requires = "api_key", requires = "project_id_system")]
+pub struct Ttp {
+    #[arg(required = false, long = "institute-ttp-url", env = "INSTITUTE_TTP_URL")]
+    pub url: Url,
+    #[arg(required = false, long = "institute-ttp-api-key", env = "INSTITUTE_TTP_API_KEY")]
+    pub api_key: String,
+    // defines the identifier to safe in the project database
+    #[arg(required = false, long, env)]
+    pub project_id_system: String,
 }

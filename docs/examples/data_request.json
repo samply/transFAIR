@@ -1,8 +1,3 @@
-#! /usr/bin/env bash
-curl http://localhost:8080/requests \
--X POST \
--H 'Content-Type: application/json' \
---data-binary @- << EOF
 {
   "patient": {
     "name": [{
@@ -173,4 +168,3 @@ curl http://localhost:8080/requests \
         }
     }
 }
-EOF
