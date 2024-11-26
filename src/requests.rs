@@ -62,7 +62,10 @@ pub async fn create_data_request(
     patient = patient.pseudonymize()?;
     consent = link_patient_consent(&consent, &patient)?;
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden 
-    let data_request_id = REQUEST_SERVER.post_data_request(patient, consent).await?;
+    let data_request_id = REQUEST_SERVER.post_data_request(DataRequestPayload {
+        patient,
+        consent
+    }).await?;
 
     let data_request = DataRequest {
         id: dbg!(data_request_id),
