@@ -1,5 +1,7 @@
-use clap::{Parser, Args};
+use clap::Parser;
 use reqwest::Url;
+
+use crate::ttp::Ttp;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -28,16 +30,4 @@ pub struct Config {
     pub fhir_output_url: Url,
     #[clap(long, env)]
     pub fhir_output_credentials: String,
-}
-
-#[derive(Args, Clone, Debug)]
-#[group(requires = "url", requires = "api_key", requires = "project_id_system")]
-pub struct Ttp {
-    #[arg(required = false, long = "institute-ttp-url", env = "INSTITUTE_TTP_URL")]
-    pub url: Url,
-    #[arg(required = false, long = "institute-ttp-api-key", env = "INSTITUTE_TTP_API_KEY")]
-    pub api_key: String,
-    // defines the identifier to safe in the project database
-    #[arg(required = false, long, env)]
-    pub project_id_system: String,
 }

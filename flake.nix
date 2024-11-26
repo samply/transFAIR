@@ -21,7 +21,7 @@
             inherit system overlays;
           };
           rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ];
+          nativeBuildInputs = with pkgs; [ rustToolchain pkg-config lldb ];
           buildInputs = with pkgs; [ openssl sqlite sqlx-cli ];
         in
         rec {

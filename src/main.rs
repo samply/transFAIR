@@ -16,7 +16,7 @@ mod banner;
 mod config;
 mod fhir;
 mod requests;
-mod mainzelliste;
+mod ttp;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
@@ -151,10 +151,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    async fn fetch_data() {
-        todo!()
     }
     
 }

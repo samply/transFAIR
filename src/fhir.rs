@@ -161,8 +161,8 @@ pub async fn post_data(fhir_endpoint: &Url, bundle: Bundle) -> Result<reqwest::R
 
 #[cfg(test)]
 mod tests {
-    use fhir_sdk::r4b::{codes::IdentifierUse, resources::Patient, types::{HumanName, Identifier}};
-    use crate::{fhir::{LinkableExt, PseudonymizableExt}, CONFIG};
+    use fhir_sdk::r4b::{codes::IdentifierUse, resources::Patient};
+    use crate::fhir::LinkableExt;
 
     #[test]
     fn add_id_request() {
