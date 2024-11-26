@@ -1,12 +1,12 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{resources::{Consent, Patient}, types::{Identifier, Reference}};
+use fhir_sdk::r4b::{resources::{Consent, Patient}, types::Reference};
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::post_data_request, mainzelliste::{request_project_pseudonym, document_patient_consent}, CONFIG};
+use crate::{fhir::{post_data_request, LinkableExt, PseudonymizableExt}, mainzelliste::{request_project_pseudonym, document_patient_consent}, CONFIG};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
@@ -26,16 +26,6 @@ pub struct DataRequest {
 pub struct DataRequestPayload {
     pub patient: Patient,
     pub consent: Consent
-}
-
-pub trait LinkableExt: Sized {
-    fn add_id_request(self, id: String) -> axum::response::Result<Self>;
-    fn get_exchange_identifier(&self) -> Option<&Identifier>;
-    fn contains_exchange_identifier(&self) -> bool;
-}
-
-pub trait PseudonymizableExt: Sized {
-    fn pseudonymize(self) -> axum::response::Result<Self>;
 }
 
 // POST /requests; Creates a new Data Request

@@ -3,7 +3,17 @@ use fhir_sdk::r4b::{resources::{Bundle, BundleEntry, BundleEntryRequest, Consent
 use reqwest::{header, StatusCode, Url};
 use tracing::{debug, error, warn};
 
-use crate::{requests::{LinkableExt, PseudonymizableExt}, CONFIG};
+use crate::CONFIG;
+
+pub trait PseudonymizableExt: Sized {
+    fn pseudonymize(self) -> axum::response::Result<Self>;
+}
+
+pub trait LinkableExt: Sized {
+    fn add_id_request(self, id: String) -> axum::response::Result<Self>;
+    fn get_exchange_identifier(&self) -> Option<&Identifier>;
+    fn contains_exchange_identifier(&self) -> bool;
+}
 
 impl LinkableExt for Patient {
     fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
@@ -147,4 +157,24 @@ pub async fn post_data(fhir_endpoint: &Url, bundle: Bundle) -> Result<reqwest::R
         .map_err(|err| {
             format!("Unable to post data to output fhir server: {}", err)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use fhir_sdk::r4b::{codes::IdentifierUse, resources::Patient, types::{HumanName, Identifier}};
+    use crate::{fhir::{LinkableExt, PseudonymizableExt}, CONFIG};
+
+    #[test]
+    fn add_id_request() {
+        let mut patient = Patient::builder().build().unwrap();
+        patient = patient.add_id_request("SOME_SYSTEM".to_string()).unwrap();
+        let identifier = patient.identifier[0].as_ref().expect("Add id request didn't add an identifier to empty patient");
+        // expect a new identifier with same system as requested
+        assert_eq!(identifier.system, Some("SOME_SYSTEM".to_string()));
+        // expect the new identifier to have secondary use
+        assert_eq!(identifier.r#use, Some(IdentifierUse::Secondary));
+        // expect the new identifier to not have a value
+        assert_eq!(identifier.value, None);
+    }
+
 }
