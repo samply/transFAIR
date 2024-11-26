@@ -4,7 +4,7 @@ use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::Config;
-use fhir::{pull_new_data, post_data};
+use fhir::FhirServer;
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
 use tracing::{debug, error, info, trace, warn, Level};
@@ -19,6 +19,18 @@ mod requests;
 mod ttp;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
+static INPUT_SERVER: Lazy<FhirServer> = Lazy::new(|| {
+    FhirServer {
+        url: CONFIG.fhir_input_url.clone(),
+        credentials: CONFIG.fhir_input_credentials.clone()
+    }
+});
+static OUTPUT_SERVER: Lazy<FhirServer> = Lazy::new(|| {
+    FhirServer {
+        url: CONFIG.fhir_output_url.clone(),
+        credentials: CONFIG.fhir_output_credentials.clone()
+    }
+});
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
 trait CheckAvailability {
@@ -110,14 +122,13 @@ async fn fetch_data() -> Result<String, String> {
     // TODO: Check if we can use a smarter logic to fetch all not fetched data
     let fetch_start_date = chrono::prelude::Utc::now();
     let query_from_date = fetch_start_date - Duration::days(1);
-    let new_data = pull_new_data(
-        &CONFIG.fhir_input_url, 
+    let new_data = INPUT_SERVER.pull_new_data(
         query_from_date.naive_local().into()
     ).await?;
     if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
-        post_data(&CONFIG.fhir_output_url, new_data).await?;
+        OUTPUT_SERVER.post_data( new_data).await?;
     }
     Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }

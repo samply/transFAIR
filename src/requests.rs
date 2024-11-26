@@ -1,12 +1,20 @@
 use axum::{extract::{Path, State}, Json};
 
 use fhir_sdk::r4b::{resources::{Consent, Patient}, types::Reference};
+use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::{post_data_request, LinkableExt, PseudonymizableExt}, CONFIG};
+use crate::{fhir::{FhirServer, LinkableExt, PseudonymizableExt}, CONFIG};
+
+static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
+    FhirServer {
+        url: CONFIG.fhir_request_url.clone(),
+        credentials: CONFIG.fhir_request_credentials.clone()
+    }
+});
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
@@ -53,8 +61,8 @@ pub async fn create_data_request(
     }
     patient = patient.pseudonymize()?;
     consent = link_patient_consent(&consent, &patient)?;
-    // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
-    let data_request_id = post_data_request(&CONFIG.fhir_request_url, &CONFIG.fhir_request_credentials, patient, consent).await?;
+    // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden 
+    let data_request_id = REQUEST_SERVER.post_data_request(patient, consent).await?;
 
     let data_request = DataRequest {
         id: dbg!(data_request_id),
