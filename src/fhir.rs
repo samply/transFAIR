@@ -2,13 +2,13 @@ use chrono::NaiveDate;
 use clap::Args;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
-    resources::{Bundle, BundleEntry, BundleEntryRequest, Consent, Patient, Resource},
+    resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
     types::Identifier,
 };
 use reqwest::{header, StatusCode, Url};
 use tracing::{debug, error, warn};
 
-use crate::CONFIG;
+use crate::{requests::DataRequestPayload, CONFIG};
 
 #[derive(Args, Clone, Debug)]
 #[group(requires = "url", requires = "credentials")]
@@ -22,46 +22,17 @@ pub struct FhirServer {
 impl FhirServer {
     pub async fn post_data_request(
         &self,
-        patient: Patient,
-        consent: Consent,
+        payload: DataRequestPayload
     ) -> Result<String, (StatusCode, &'static str)> {
         let bundle_endpoint = format!("{}fhir", self.url);
         debug!("Posting request for DIC to {}", self.url);
 
-        let patient_entry = BundleEntry::builder()
-            .resource(Resource::from(patient))
-            .request(
-                BundleEntryRequest::builder()
-                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
-                    .url(String::from("/Patient"))
-                    .build()
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let consent_entry = BundleEntry::builder()
-            .resource(Resource::from(consent))
-            .request(
-                BundleEntryRequest::builder()
-                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
-                    .url(String::from("/Consent"))
-                    .build()
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let payload_bundle = Bundle::builder()
-            .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
-            .entry(vec![Some(patient_entry), Some(consent_entry)])
-            .build()
-            .unwrap();
+        let bundle: Bundle = payload.into();
 
         let response = reqwest::Client::new()
             .post(bundle_endpoint)
             .header(header::CONTENT_TYPE, "application/json+fhir")
-            .json(&payload_bundle)
+            .json(&bundle)
             .send()
             .await
             .map_err(|err| {
@@ -198,6 +169,40 @@ impl PseudonymizableExt for Patient {
             })?;
         Ok(pseudonymized_patient)
     } 
+}
+
+impl Into<Bundle> for DataRequestPayload {
+    fn into(self) -> Bundle {
+        let patient_entry = BundleEntry::builder()
+            .resource(Resource::from(self.patient))
+            .request(
+                BundleEntryRequest::builder()
+                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
+                    .url(String::from("/Patient"))
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        let consent_entry = BundleEntry::builder()
+            .resource(Resource::from(self.consent))
+            .request(
+                BundleEntryRequest::builder()
+                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
+                    .url(String::from("/Consent"))
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        Bundle::builder()
+            .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
+            .entry(vec![Some(patient_entry), Some(consent_entry)])
+            .build()
+            .unwrap()
+    }
 }
 
 #[cfg(test)]
