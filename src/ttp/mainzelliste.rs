@@ -4,44 +4,40 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{config::Ttp, CheckAvailability, CheckIdTypeAvailable};
+use super::Ttp;
 
-impl CheckAvailability for Ttp {
-    async fn check_availability(&self) -> bool {
-        let response = match reqwest::Client::new()
-            .get(self.url.clone())
-            .header( "Accept", "application/json")
-            .send()
-            .await
+pub(super) async fn check_availability(ttp: &Ttp) -> bool {
+    let response = match reqwest::Client::new()
+        .get(ttp.url.clone())
+        .header( "Accept", "application/json")
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(e) => {
+            debug!("Error making request to mainzelliste: {:?}", e);
+            return false
+        }
+    };
+    if response.status().is_client_error() || response.status().is_server_error() {
+        return false;
+    }
+    true               
+}
+
+pub(super) async fn check_idtype_available(ttp: &Ttp, idtype: &str) -> bool {
+    let ttp_supported_ids = match get_supported_ids(&ttp)
+        .await
         {
-            Ok(response) => response,
-            Err(e) => {
-                debug!("Error making request to mainzelliste: {:?}", e);
+            Ok(idtypes) => idtypes,
+            Err(err) => {
+                debug!("Error fetching supported id types from ttp: {:?}", err);
                 return false
             }
         };
-        if response.status().is_client_error() || response.status().is_server_error() {
-            return false;
-        }
-        true               
-    }
-}
-
-impl CheckIdTypeAvailable for Ttp {
-    async fn check_idtype_available(&self, idtype: &str) -> bool {
-        let ttp_supported_ids = match get_supported_ids(&self)
-            .await
-            {
-                Ok(idtypes) => idtypes,
-                Err(err) => {
-                    debug!("Error fetching supported id types from ttp: {:?}", err);
-                    return false
-                }
-            };
-        ttp_supported_ids.into_iter().any(
-            |x| x == idtype
-        )
-    }
+    ttp_supported_ids.into_iter().any(
+        |x| x == idtype
+    )
 }
 
 pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
@@ -74,7 +70,7 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
     Ok(supported_ids)
 }
 
-pub async fn request_project_pseudonym(
+pub(super) async fn request_project_pseudonym(
     patient: &mut Patient,
     ttp: &Ttp
 ) -> Result<Patient, (StatusCode, &'static str)> {
@@ -178,7 +174,7 @@ async fn create_mainzelliste_token(session: Session, token_type: TokenType, ttp:
     }) 
 }
 
-pub async fn document_patient_consent(
+pub(super) async fn document_patient_consent(
     consent: Consent,
     patient: &Patient,
     ttp: &Ttp

@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::{post_data_request, LinkableExt, PseudonymizableExt}, mainzelliste::{request_project_pseudonym, document_patient_consent}, CONFIG};
+use crate::{fhir::{post_data_request, LinkableExt, PseudonymizableExt}, CONFIG};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
@@ -39,9 +39,9 @@ pub async fn create_data_request(
         patient = patient
           .add_id_request(CONFIG.exchange_id_system.clone())?
           .add_id_request(ttp.project_id_system.clone())?;
-        patient = request_project_pseudonym(&mut patient, &ttp).await?;
+        patient = ttp.request_project_pseudonym(&mut patient).await?;
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
-        consent = document_patient_consent(consent, &patient, &ttp).await?;
+        consent = ttp.document_patient_consent(consent, &patient).await?;
         trace!("TTP returned this consent for Patient {:?}", consent);
     } else {
         // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
