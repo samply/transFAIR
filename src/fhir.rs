@@ -98,17 +98,14 @@ impl FhirServer {
     }
 }
 
-pub trait PseudonymizableExt: Sized {
+pub trait PatientExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
-}
-
-pub trait LinkableExt: Sized {
     fn add_id_request(self, id: String) -> axum::response::Result<Self>;
     fn get_exchange_identifier(&self) -> Option<&Identifier>;
     fn contains_exchange_identifier(&self) -> bool;
 }
 
-impl LinkableExt for Patient {
+impl PatientExt for Patient {
     fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
         let request = Identifier::builder()
             .r#use(IdentifierUse::Secondary)
@@ -143,9 +140,7 @@ impl LinkableExt for Patient {
             .flatten()
             .any(|x| x.system.as_ref() == Some(&CONFIG.exchange_id_system))
     }
-}
 
-impl PseudonymizableExt for Patient {
     fn pseudonymize(self) -> axum::response::Result<Self> {
         let id = self.id.clone().unwrap();
         let exchange_identifier_pos = self
@@ -168,7 +163,7 @@ impl PseudonymizableExt for Patient {
                 )
             })?;
         Ok(pseudonymized_patient)
-    } 
+    }
 }
 
 impl Into<Bundle> for DataRequestPayload {
@@ -207,7 +202,7 @@ impl Into<Bundle> for DataRequestPayload {
 
 #[cfg(test)]
 mod tests {
-    use crate::fhir::LinkableExt;
+    use crate::fhir::PatientExt;
     use fhir_sdk::r4b::{codes::IdentifierUse, resources::Patient};
 
     #[test]

@@ -7,7 +7,7 @@ use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::{FhirServer, LinkableExt, PseudonymizableExt}, CONFIG};
+use crate::{fhir::{FhirServer, PatientExt}, CONFIG};
 
 static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
     FhirServer {
