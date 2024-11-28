@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.93"
 axum = "0.7.5"
 chrono = { version = "0.4.37", default-features = false, features = ["serde", "now"] }
 clap = { version = "4.5.3", features = ["env", "derive"] }
@@ -15,6 +16,7 @@ reqwest = { version = "0.12.2", features = ["json"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "sqlite", "uuid"] }
+thiserror = "2.0.3"
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

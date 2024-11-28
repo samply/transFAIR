@@ -4,7 +4,9 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use super::Ttp;
+use crate::ttp::TtpError;
+
+use super::{Ttp, TtpResult};
 
 pub(super) async fn check_availability(ttp: &Ttp) -> bool {
     let response = match reqwest::Client::new()
@@ -40,7 +42,7 @@ pub(super) async fn check_idtype_available(ttp: &Ttp, idtype: &str) -> bool {
     )
 }
 
-pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
+pub async fn get_supported_ids(ttp: &Ttp) -> TtpResult<Vec<String>> {
     let idtypes_endpoint = ttp.url.join("configuration/idTypes").unwrap();
 
     let supported_ids = reqwest::Client::new()
@@ -53,7 +55,7 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
                 "Couldn't connect to Mainzelliste. Request failed with error: {}",
                 err
             );
-            (StatusCode::SERVICE_UNAVAILABLE, "Connection to TTP failed.")
+            TtpError::CommunicationError(err)
         })?
         .json::<Vec<String>>()
         .await
@@ -62,10 +64,7 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
                 "Failed to parse returned idTypes from Mainzelliste. Failed with error: {}",
                 err
             );
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Unable to parse Mainzelliste response as JSON",
-            )
+            TtpError::InvalidResponse(err)
         })?;
     Ok(supported_ids)
 }
@@ -83,14 +82,7 @@ pub(super) async fn request_project_pseudonym(
         .json(&patient)
         .send()
         .await
-        .map_err(|err| {
-            warn!("Failed to communicate with mainzelliste: {}", err);
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Failed to communicate with mainzelliste: {}",
-                err,
-            )
-        })
+        .map_err(|err| TtpError::CommunicationError(err))
         .unwrap();
 
     let patient = response
