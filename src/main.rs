@@ -1,7 +1,6 @@
-use std::{process::ExitCode, time};
+use std::{process::ExitCode, time::Duration};
 
 use axum::{routing::{get, post}, Router};
-use chrono::Duration;
 use clap::Parser;
 use config::Config;
 use fhir::FhirServer;
@@ -19,18 +18,6 @@ mod requests;
 mod ttp;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
-static INPUT_SERVER: Lazy<FhirServer> = Lazy::new(|| {
-    FhirServer {
-        url: CONFIG.fhir_input_url.clone(),
-        credentials: CONFIG.fhir_input_credentials.clone()
-    }
-});
-static OUTPUT_SERVER: Lazy<FhirServer> = Lazy::new(|| {
-    FhirServer {
-        url: CONFIG.fhir_output_url.clone(),
-        credentials: CONFIG.fhir_output_credentials.clone()
-    }
-});
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
 trait CheckAvailability {
@@ -71,7 +58,7 @@ async fn main() -> ExitCode {
                 );
                 return ExitCode::from(22);
             }
-            tokio::time::sleep(time::Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
             warn!(
                 "Retrying connection (attempt {}/{})",
                 failures, RETRY_COUNT
@@ -88,14 +75,22 @@ async fn main() -> ExitCode {
     }
 
     tokio::spawn(async move {
-        const RETRY_PERIOD: u64 = 60;
+        const RETRY_PERIOD: Duration = Duration::from_secs(60);
+        let input_fhir_server =  FhirServer {
+            url: CONFIG.fhir_input_url.clone(),
+            credentials: CONFIG.fhir_input_credentials.clone()
+        };
+        let output_fhir_server =  FhirServer {
+            url: CONFIG.fhir_output_url.clone(),
+            credentials: CONFIG.fhir_output_credentials.clone()
+        };
         loop {
             // TODO: Persist the updated data in the database
-            match fetch_data().await {
+            match fetch_data(&input_fhir_server, &output_fhir_server).await {
                 Ok(status) => info!("{}", status),
-                Err(error) => warn!("Failed to fetch project data: {}. Will try again in {}", error, RETRY_PERIOD)
+                Err(error) => warn!("Failed to fetch project data: {error}. Will try again in {}s", RETRY_PERIOD.as_secs())
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_PERIOD)).await;
+            tokio::time::sleep(RETRY_PERIOD).await;
         }
     });
 
@@ -117,18 +112,18 @@ async fn main() -> ExitCode {
     ExitCode::from(0)
 }
 
-// Pull data from INPUT_FHIR and push it to OUTPUT_FHIR
-async fn fetch_data() -> Result<String, String> {
+// Pull data from input_fhir_server and push it to output_fhir_server
+async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer) -> Result<String, String> {
     // TODO: Check if we can use a smarter logic to fetch all not fetched data
     let fetch_start_date = chrono::prelude::Utc::now();
-    let query_from_date = fetch_start_date - Duration::days(1);
-    let new_data = INPUT_SERVER.pull_new_data(
+    let query_from_date = fetch_start_date - chrono::Duration::days(1);
+    let new_data = input_fhir_server.pull_new_data(
         query_from_date.naive_local().into()
     ).await?;
     if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
-        OUTPUT_SERVER.post_data( new_data).await?;
+        output_fhir_server.post_data( new_data).await?;
     }
     Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }

@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use clap::Args;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
     resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
@@ -10,12 +9,9 @@ use tracing::{debug, error, warn};
 
 use crate::{requests::DataRequestPayload, CONFIG};
 
-#[derive(Args, Clone, Debug)]
-#[group(requires = "url", requires = "credentials")]
+#[derive(Clone, Debug)]
 pub struct FhirServer {
-    #[arg(required = false)]
     pub url: Url,
-    #[arg(required = false)]
     pub credentials: String,
 }
 
@@ -41,8 +37,7 @@ impl FhirServer {
                     StatusCode::SERVICE_UNAVAILABLE,
                     "Unable to connect to consent fhir server. Please try later.",
                 )
-            })
-            .unwrap();
+            })?;
 
         if response.status().is_client_error() | response.status().is_server_error() {
             error!(
@@ -60,7 +55,7 @@ impl FhirServer {
             .map_err(|err| {
                 error!("Unable to parse consent returned by fhir server: {}", err);
                 (StatusCode::BAD_GATEWAY, "Unable to parse consent returned by consent server. Please contact your administrator.")
-            }).unwrap();
+            })?;
 
         Ok(bundle
             .id
