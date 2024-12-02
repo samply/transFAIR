@@ -16,3 +16,7 @@ data_requests.sql
 # ignore dev supporting files
 .env
 *.http
+
+
+# CI should always use latest versions permitted by Cargo.toml
+Cargo.lock
