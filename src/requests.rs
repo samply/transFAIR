@@ -10,10 +10,7 @@ use tracing::{trace, debug, error};
 use crate::{fhir::{FhirServer, PatientExt}, CONFIG};
 
 static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
-    FhirServer {
-        url: CONFIG.fhir_request_url.clone(),
-        credentials: CONFIG.fhir_request_credentials.clone()
-    }
+    FhirServer::new(CONFIG.fhir_request_url.clone(), CONFIG.fhir_request_credentials.clone())
 });
 
 #[derive(Serialize, Deserialize, sqlx::Type)]

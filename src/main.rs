@@ -76,14 +76,14 @@ async fn main() -> ExitCode {
 
     tokio::spawn(async move {
         const RETRY_PERIOD: Duration = Duration::from_secs(60);
-        let input_fhir_server =  FhirServer {
-            url: CONFIG.fhir_input_url.clone(),
-            credentials: CONFIG.fhir_input_credentials.clone()
-        };
-        let output_fhir_server =  FhirServer {
-            url: CONFIG.fhir_output_url.clone(),
-            credentials: CONFIG.fhir_output_credentials.clone()
-        };
+        let input_fhir_server =  FhirServer::new(
+            CONFIG.fhir_input_url.clone(),
+            CONFIG.fhir_input_credentials.clone()
+        );
+        let output_fhir_server =  FhirServer::new (
+            CONFIG.fhir_output_url.clone(),
+            CONFIG.fhir_output_credentials.clone()
+        );
         loop {
             // TODO: Persist the updated data in the database
             match fetch_data(&input_fhir_server, &output_fhir_server).await {
