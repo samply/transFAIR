@@ -4,18 +4,38 @@ use fhir_sdk::r4b::{
     resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
     types::Identifier,
 };
-use reqwest::{header, StatusCode, Url};
+use reqwest::{header, Client, StatusCode, Url};
 use tracing::{debug, error, warn};
 
-use crate::{requests::DataRequestPayload, CONFIG};
+use crate::{config::Auth, requests::DataRequestPayload, CONFIG};
 
 #[derive(Clone, Debug)]
 pub struct FhirServer {
-    pub url: Url,
-    pub credentials: String,
+    url: Url,
+    auth: Option<Auth>,
+    client: Client,
+}
+
+trait ClientBuilderExt {
+    fn add_auth(self, auth: &Option<Auth>) -> Self;
+}
+
+impl ClientBuilderExt for reqwest::RequestBuilder {
+    fn add_auth(self, auth: &Option<Auth>) -> Self {
+        let Some(auth) = auth else {
+            return self
+        };
+        match auth {
+            Auth::Basic { user, pw } => self.basic_auth(user, Some(pw)),
+        }
+    }
 }
 
 impl FhirServer {
+    pub fn new(url: Url, auth: Option<Auth>) -> Self {
+        Self { url, auth, client: Client::new() }
+    }
+    
     pub async fn post_data_request(
         &self,
         payload: DataRequestPayload
@@ -25,8 +45,9 @@ impl FhirServer {
 
         let bundle: Bundle = payload.into();
 
-        let response = reqwest::Client::new()
+        let response = self.client
             .post(bundle_endpoint)
+            .add_auth(&self.auth)
             .header(header::CONTENT_TYPE, "application/json+fhir")
             .json(&bundle)
             .send()
@@ -39,7 +60,7 @@ impl FhirServer {
                 )
             })?;
 
-        if response.status().is_client_error() | response.status().is_server_error() {
+        if response.status().is_client_error() || response.status().is_server_error() {
             error!(
                 "Unable to push request to server: status={}",
                 response.status()
@@ -68,8 +89,9 @@ impl FhirServer {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Fetching new data from: {}", bundle_endpoint);
         let query = vec![("_lastUpdated", format!("gt{}", last_update))];
-        let response = reqwest::Client::new()
+        let response = self.client
             .get(bundle_endpoint)
+            .add_auth(&self.auth)
             .query(&query)
             .send()
             .await
@@ -84,8 +106,9 @@ impl FhirServer {
     pub async fn post_data(&self, bundle: Bundle) -> Result<reqwest::Response, String> {
         let bundle_endpoint = format!("{}fhir", self.url);
         debug!("Posting data to output fhir server: {}", bundle_endpoint);
-        reqwest::Client::new()
+        self.client
             .post(bundle_endpoint)
+            .add_auth(&self.auth)
             .json(&bundle)
             .send()
             .await

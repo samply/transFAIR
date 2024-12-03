@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use clap::Parser;
 use reqwest::Url;
 
@@ -19,15 +21,32 @@ pub struct Config {
     #[clap(long, env)]
     pub fhir_request_url: Url,
     #[clap(long, env)]
-    pub fhir_request_credentials: String,
+    pub fhir_request_credentials: Option<Auth>,
     // Definition of the fhir server and credentials used for reading data from the dic
     #[clap(long, env)]
     pub fhir_input_url: Url,
     #[clap(long, env)]
-    pub fhir_input_credentials: String,
+    pub fhir_input_credentials: Option<Auth>,
     // Definition of the fhir server and credentials used for adding data to the project data
     #[clap(long, env)]
     pub fhir_output_url: Url,
     #[clap(long, env)]
-    pub fhir_output_credentials: String,
+    pub fhir_output_credentials: Option<Auth>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Auth {
+    Basic {
+        user: String,
+        pw: String,
+    },
+}
+
+impl FromStr for Auth {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (user, pw) = s.split_once(":").ok_or("Credentials should be in the form of '<user>:<pw>'")?;
+        Ok(Self::Basic { user: user.to_owned(), pw: pw.to_owned() })
+    }
 }
