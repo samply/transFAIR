@@ -138,32 +138,37 @@ async fn fetch_data() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
 
     use crate::requests::DataRequest;
 
     async fn post_data_request() -> DataRequest {
         let json = include_bytes!("../docs/examples/data_request.json");
-        let response = reqwest::Client::new()
+        let response_result = reqwest::Client::new()
             .post(format!("http://localhost:8080/requests"))
             .json(&serde_json::from_slice::<serde_json::Value>(json).unwrap())
             .send()
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
+            .await;
+        assert_eq!(response_result.is_ok(), true, "POST response (from /requests) was not OK");
 
+        let response = response_result.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
         response.json().await.unwrap()
     }
 
     #[tokio::test]
     async fn get_data_request() {
         let data_request = post_data_request().await;
-        let response = reqwest::Client::new()
-            .get(format!("http://localhost:8080/requests/{}", dbg!(data_request.id)))
-            .send()
-            .await
-            .unwrap();
+        let url = format!("http://localhost:8080/requests/{}", dbg!(data_request.id));
 
+        let response_result = reqwest::Client::new()
+            .get(url)
+            .send()
+            .await;
+        assert!(response_result.is_ok(), "GET response (from /requests/id) was not OK");
+
+        let response = response_result.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
     
