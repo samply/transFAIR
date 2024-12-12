@@ -4,7 +4,7 @@ use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::Config;
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use fhir::FhirServer;
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
@@ -138,38 +138,41 @@ async fn fetch_data() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
-
+    
     use crate::requests::DataRequest;
 
-    async fn post_data_request() -> DataRequest {
-        let json = include_bytes!("../docs/examples/data_request.json");
-        let response_result = reqwest::Client::new()
-            .post(format!("http://localhost:8080/requests"))
-            .json(&serde_json::from_slice::<serde_json::Value>(json).unwrap())
-            .send()
-            .await;
-        assert_eq!(response_result.is_ok(), true, "POST response (from /requests) was not OK");
+    async fn post_data_request() -> DataRequest {        
+        let bytes = include_bytes!("../docs/examples/data_request.json");        
+        let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
 
-        let response = response_result.unwrap();
+        // NOTE: this test fails if the no_proxy env var is not set, hence this dbg stmt
+        dbg!(env::var("no_proxy").is_ok());
+
+        let response = reqwest::Client::new()
+            .post(format!("http://localhost:8080/requests"))
+            .json(json)
+            .send()
+            .await
+            .expect("POST endpoint (/requests) should give a valid response");
         assert_eq!(response.status(), StatusCode::CREATED);
         response.json().await.unwrap()
     }
 
     #[tokio::test]
+    // #[traced_test]
     async fn get_data_request() {
         let data_request = post_data_request().await;
-        let url = format!("http://localhost:8080/requests/{}", dbg!(data_request.id));
+        let url = format!("http://localhost:8080/requests/{}", data_request.id);
 
-        let response_result = reqwest::Client::new()
+        let response = reqwest::Client::new()
             .get(url)
             .send()
-            .await;
-        assert!(response_result.is_ok(), "GET response (from /requests/id) was not OK");
-
-        let response = response_result.unwrap();
+            .await
+            .expect("GET endpoint (/requests/id) should give a valid response");
         assert_eq!(response.status(), StatusCode::OK);
     }
-    
 }
