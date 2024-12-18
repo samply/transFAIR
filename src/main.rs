@@ -4,7 +4,6 @@ use axum::{routing::{get, post}, Router};
 use chrono::Duration;
 use clap::Parser;
 use config::Config;
-use dotenvy::dotenv;
 use fhir::FhirServer;
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
@@ -44,8 +43,6 @@ trait CheckIdTypeAvailable {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    dotenv().ok();
-    
     tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(Level::DEBUG)
         .with_env_filter(EnvFilter::from_default_env())
