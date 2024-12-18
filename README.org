@@ -107,9 +107,8 @@ cargo run -- --institute-ttp-url="http://localhost:8081" --institute-ttp-api-key
 #+end_src
 
 ** How to run
-This tool expects some arguments to be passed to it, from either the command line, or from an ~.env~ file. The values in the ~.env~ file were not 
-getting read, so include them in your cargo tool's ~config.toml~ file (Linux location is ~/.cargo/config.toml). You can copy paste the contents of
-the ~.env~ file to the ~config.toml~ file.
+This tool expects some arguments to be passed to it - we could pass them as command line arguments, but as there are a large number of these,
+we are using a =.cargo/config.toml= file.
 
 * Weitere Informationen
 Im bisherigen Rahmen der Entwicklungen wurden mehrere Dokumente angelegt, die im [[file:docs][docs]] Ordner hinterlegt sind. Diese enthalten:
