@@ -1,0 +1,63 @@
+#!/bin/bash -e
+
+SD=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+cd $SD/..
+
+function start_bg() {
+  trap "echo; echo; docker compose logs; docker compose down" EXIT
+
+  # Test Config Setup
+  export INSTITUTE_TTP_URL="http://localhost:8081";
+  export INSTITUTE_TTP_API_KEY="routine-connector-password";
+  export PROJECT_ID_SYSTEM="SESSION_ID"
+  export FHIR_REQUEST_URL="http://localhost:8085"
+  export FHIR_INPUT_URL="http://localhost:8086"
+  export FHIR_OUTPUT_URL="http://localhost:8095"
+  export EXCHANGE_ID_SYSTEM="SESSION_ID"
+  export DATABASE_URL="sqlite://data_requests.sql?mode=rwc"
+  export RUST_LOG="info,routine_connector=debug"
+  docker compose up -d --no-build --no-recreate
+  for blaze_port in 8085 8086 8090 8095; do
+    TRIES=1
+    while [ $TRIES -ne 0 ]; do
+      set +e
+      CODE=$(curl -s -o /tmp/body -w '%{response_code}' http://localhost:$blaze_port/fhir/metadata)
+      set -e
+      if [ "$CODE" == "200" ]; then
+        TRIES=0
+      else
+        echo "Waiting for blaze on port $blaze_port ... (try ${TRIES}/300, last response was: code=$OUT, body=\"$(cat /tmp/body 2>/dev/null | head)\")"
+        sleep 1
+        ((TRIES = TRIES + 1))
+        if [ $TRIES -ge 300 ]; then
+          echo "ERROR: blaze on port $blaze_port not available after 300 seconds. Giving up and printing docker compose logs."
+          docker compose logs
+          exit 5
+        fi
+      fi
+    done
+  done
+  chmod +x artifacts/binaries-amd64/routine-connector
+  artifacts/binaries-amd64/routine-connector &
+  sleep 10
+}
+
+case "$1" in
+noci)
+  shift
+  cargo test $@
+  ;;
+ci)
+  start_bg
+  shift
+  for testbin in $SD/../testbinaries/*; do
+    chmod +x $testbin
+    $testbin
+  done
+  ;;
+*)
+  echo "Usage: $0 noci|ci"
+  exit 1
+  ;;
+esac
