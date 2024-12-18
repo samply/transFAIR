@@ -135,8 +135,6 @@ async fn fetch_data() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
     
@@ -145,9 +143,6 @@ mod tests {
     async fn post_data_request() -> DataRequest {        
         let bytes = include_bytes!("../docs/examples/data_request.json");        
         let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
-
-        // NOTE: this test fails if the no_proxy env var is not set, hence this dbg stmt
-        dbg!(env::var("no_proxy").is_ok());
 
         let response = reqwest::Client::new()
             .post(format!("http://localhost:8080/requests"))
@@ -160,7 +155,6 @@ mod tests {
     }
 
     #[tokio::test]
-    // #[traced_test]
     async fn get_data_request() {
         let data_request = post_data_request().await;
         let url = format!("http://localhost:8080/requests/{}", data_request.id);
