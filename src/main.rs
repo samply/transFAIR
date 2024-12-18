@@ -130,33 +130,35 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
-
+    
     use crate::requests::DataRequest;
 
-    async fn post_data_request() -> DataRequest {
-        let json = include_bytes!("../docs/examples/data_request.json");
+    async fn post_data_request() -> DataRequest {        
+        let bytes = include_bytes!("../docs/examples/data_request.json");        
+        let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
+
         let response = reqwest::Client::new()
             .post(format!("http://localhost:8080/requests"))
-            .json(&serde_json::from_slice::<serde_json::Value>(json).unwrap())
+            .json(json)
             .send()
             .await
-            .unwrap();
+            .expect("POST endpoint (/requests) should give a valid response");
         assert_eq!(response.status(), StatusCode::CREATED);
-
         response.json().await.unwrap()
     }
 
     #[tokio::test]
     async fn get_data_request() {
         let data_request = post_data_request().await;
+        let url = format!("http://localhost:8080/requests/{}", data_request.id);
+
         let response = reqwest::Client::new()
-            .get(format!("http://localhost:8080/requests/{}", dbg!(data_request.id)))
+            .get(url)
             .send()
             .await
-            .unwrap();
-
+            .expect("GET endpoint (/requests/id) should give a valid response");
         assert_eq!(response.status(), StatusCode::OK);
     }
-    
 }

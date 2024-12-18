@@ -12,3 +12,7 @@ docker-compose.override.yml
 
 # ignore database
 data_requests.sql
+
+# ignore dev supporting files
+.env
+*.http

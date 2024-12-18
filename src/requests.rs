@@ -44,7 +44,9 @@ pub async fn create_data_request(
         patient = patient
           .add_id_request(CONFIG.exchange_id_system.clone())?
           .add_id_request(ttp.project_id_system.clone())?;
+        // pseudonymize the patient
         patient = ttp.request_project_pseudonym(&mut patient).await?;
+        // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         consent = ttp.document_patient_consent(consent, &patient).await?;
         trace!("TTP returned this consent for Patient {:?}", consent);
@@ -69,6 +71,7 @@ pub async fn create_data_request(
         status: RequestStatus::Created,
     };
 
+    // storage for associated project id
     let sqlite_query_result = sqlx::query!(
         "INSERT INTO data_requests (id, status) VALUES ($1, $2)",
         data_request.id, data_request.status
