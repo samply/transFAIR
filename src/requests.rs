@@ -16,15 +16,15 @@ static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
     Created = 1,
-    _DataLoaded = 2,
-    _UpdateAvailable = 3,
-    Error = 4,
+    Success = 2,
+    Error = 3,
 }
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 pub struct DataRequest {
     pub id: String,
     pub status: RequestStatus,
+    pub message: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -69,12 +69,13 @@ pub async fn create_data_request(
     let data_request = DataRequest {
         id: dbg!(data_request_id),
         status: RequestStatus::Created,
+        message: None
     };
 
     // storage for associated project id
     let sqlite_query_result = sqlx::query!(
-        "INSERT INTO data_requests (id, status) VALUES ($1, $2)",
-        data_request.id, data_request.status
+        "INSERT INTO data_requests (id, status, message) VALUES ($1, $2, $3)",
+        data_request.id, data_request.status, ""
     ).execute(&database_pool).await.map_err(|e| {
         error!("Unable to persist data request to database. {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to persist data request to database.")
@@ -92,7 +93,7 @@ pub async fn list_data_requests(
 ) -> Result<Json<Vec<DataRequest>>, (StatusCode, &'static str)> {
     let data_requests = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id, status as "status: _" FROM data_requests;"#,
+        r#"SELECT id, status as "status: _", message FROM data_requests;"#,
     ).fetch_all(&database_pool).await.map_err(|e| {
        error!("Unable to fetch data requests from database: {}", e); 
        (StatusCode::INTERNAL_SERVER_ERROR, "Unable to fetch data requests from database!")
@@ -108,7 +109,7 @@ pub async fn get_data_request(
     debug!("Information on data request {} requested.", request_id);
     let data_request = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id, status as "status: _" FROM data_requests WHERE id = $1;"#,
+        r#"SELECT id, status as "status: _", message FROM data_requests WHERE id = $1;"#,
         request_id
     ).fetch_optional(&database_pool).await.map_err(|e| {
         error!("Unable to fetch data request {} from database: {}", request_id, e);
