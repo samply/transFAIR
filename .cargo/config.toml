@@ -13,8 +13,3 @@ PROJECT_ID_SYSTEM="PROJECT_1_ID"
 EXCHANGE_ID_SYSTEM="SESSION_ID"
 RUST_LOG="warn,wip_routine_connector=debug"
 no_proxy="localhost"
-# Environment for Mainzelliste
-ML_DB_PASS="my-secret-db-password"
-ML_ROUTINE_CONNECTOR_PASSPHRASE="routine-connector-password"
-ML_DIZ_PASSPHRASE="diz-password"
-ML_LOG_LEVEL="debug"

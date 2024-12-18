@@ -16,9 +16,10 @@ services:
       ML_DB_NAME: mainzelliste
       ML_DB_USER: mainzelliste
       ML_DB_HOST: mainzelliste-db
-      ML_DB_PASS: "${ML_DB_PASS}"
-      ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE}"
-      ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE}"
+      ML_DB_PASS: "${ML_DB_PASS:-my-secret-db-password}"
+      ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE:-routine-connector-password}"
+      ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE:-diz-password}"
+      ML_LOG_LEVEL: "${ML_LOG_LEVEL:-debug}"
     configs:
       - mainzelliste.docker.conf
     depends_on:
@@ -29,7 +30,7 @@ services:
     environment:
       POSTGRES_DB: mainzelliste
       POSTGRES_USER: mainzelliste
-      POSTGRES_PASSWORD: "${ML_DB_PASS}"
+      POSTGRES_PASSWORD: "${ML_DB_PASS:-my-secret-db-password}"
 
   # TODO: Alternative deployment version for Greifswald THS
   # will include a full set of epix, gics, gpas
