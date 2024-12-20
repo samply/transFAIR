@@ -19,7 +19,7 @@ services:
       ML_DB_PASS: "${ML_DB_PASS:-my-secret-db-password}"
       ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE:-routine-connector-password}"
       ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE:-diz-password}"
-      ML_LOG_LEVEL: "${ML_LOG_LEVEL:-debug}"
+      ML_LOG_LEVEL: "${ML_LOG_LEVEL:-info}"
     configs:
       - mainzelliste.docker.conf
     depends_on:
