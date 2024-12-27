@@ -16,6 +16,7 @@ mod config;
 mod fhir;
 mod requests;
 mod ttp;
+mod data_access;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
@@ -132,9 +133,9 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
 mod tests {
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
-    
-    use crate::requests::DataRequest;
 
+    use crate::data_access::models::DataRequest;
+    
     async fn post_data_request() -> DataRequest {        
         let bytes = include_bytes!("../docs/examples/data_request.json");        
         let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();

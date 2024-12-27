@@ -7,7 +7,7 @@ use fhir_sdk::r4b::{
 use reqwest::{header, Client, StatusCode, Url};
 use tracing::{debug, error, warn};
 
-use crate::{config::Auth, requests::DataRequestPayload, CONFIG};
+use crate::{config::Auth, data_access::models::DataRequestPayload, CONFIG};
 
 #[derive(Clone, Debug)]
 pub struct FhirServer {
