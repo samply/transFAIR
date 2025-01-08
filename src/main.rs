@@ -98,7 +98,7 @@ async fn main() -> ExitCode {
     let request_routes = Router::new()
         .route("/", post(create_data_request))
         .route("/", get(list_data_requests))
-        .route("/:request_id", get(get_data_request))
+        .route("/{request_id}", get(get_data_request))
         .with_state(database_pool);
 
     let app = Router::new()
