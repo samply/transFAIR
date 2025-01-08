@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 
 [build-dependencies]
-build-data = "0.1.5"
+build-data = "0.2.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
