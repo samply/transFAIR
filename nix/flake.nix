@@ -15,7 +15,7 @@
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          name = "wip-routine-connector";
+          name = "routine-connector";
           overlays = [ (import rust-overlay) ];
           pkgs = import nixpkgs {
             inherit system overlays;
@@ -32,11 +32,11 @@
             INSTITUTE_TTP_URL="http://localhost:8081";
             INSTITUTE_TTP_API_KEY="routine-connector-password";
             FHIR_REQUEST_URL = "http://localhost:8085";
-            FHIR_REQUEST_CREDENTIALS = "bla";
+            # FHIR_REQUEST_CREDENTIALS = "bla:test";
             FHIR_INPUT_URL = "http://localhost:8086";
-            FHIR_INPUT_CREDENTIALS = "foo";
+            # FHIR_INPUT_CREDENTIALS = "foo:test";
             FHIR_OUTPUT_URL = "http://localhost:8095";
-            FHIR_OUTPUT_CREDENTIALS = "foobar";
+            # FHIR_OUTPUT_CREDENTIALS = "foobar:test";
             EXCHANGE_ID_SYSTEM = "SESSION_ID";
             DATABASE_URL="sqlite://data_requests.sql?mode=rwc";
             RUST_LOG="warn,wip_routine_connector=debug";
