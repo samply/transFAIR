@@ -9,6 +9,7 @@ docker-compose.override.yml
 
 # build outputs
 /target
+result*
 
 # ignore database
 data_requests.sql
