@@ -14,7 +14,7 @@ use tracing::{debug, error, trace};
 
 use crate::{
     data_access::{
-        data_requests::{get_all, get_by_id, insert},
+        data_requests::{exists, get_all, get_by_id, insert},
         models::{DataRequest, DataRequestPayload},
     },
     fhir::{FhirServer, PatientExt},
@@ -64,6 +64,23 @@ pub async fn create_data_request(
                 .into());
         }
     }
+
+    // TODO: check if this id, project_id combination exists in the DB (and then only post the request)
+    let optional_patient_id = patient.id.clone();
+    if optional_patient_id.is_none() {
+        let err_str = format!("Couldn't find a patient without a valid id!");
+        let err_tuple = (StatusCode::BAD_REQUEST,err_str);
+        return Err(err_tuple.into());
+    }
+
+    let patient_id = optional_patient_id.unwrap();
+    debug!("patient id: {patient_id}");
+    if exists(&database_pool, &patient_id, project_id).await {
+        let err_str = format!("A request for a patient {} in the project {} has already been generated!", patient_id, project_id);
+        let err_tuple = (StatusCode::BAD_REQUEST,err_str);
+        return Err(err_tuple.into());
+    }
+
     patient = patient.pseudonymize()?;
     consent = link_patient_consent(&consent, &patient)?;
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
@@ -71,7 +88,7 @@ pub async fn create_data_request(
         .post_data_request(DataRequestPayload { patient, consent })
         .await?;
 
-    let data_request = DataRequest::new(dbg!(data_request_id), project_id.into());
+    let data_request = DataRequest::new(data_request_id, patient_id, project_id.into());
     // storage for associated project id
     let last_insert_rowid = insert(&database_pool, &data_request)
     .await

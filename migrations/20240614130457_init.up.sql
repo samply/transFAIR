@@ -11,7 +11,8 @@ VALUES  ('Created', 1),
 
 CREATE TABLE IF NOT EXISTS data_requests (
     id          CHAR(36)    PRIMARY KEY NOT NULL,
+    patient_id  CHAR(36)    NOT NULL,
     project_id  CHAR(36)    NOT NULL,
     status      CHAR(16)    NOT NULL DEFAULT ('Created') REFERENCES request_status(Type),
-    UNIQUE(id, project_id)
+    UNIQUE(patient_id, project_id)
 )
