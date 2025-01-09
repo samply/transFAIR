@@ -1,5 +1,5 @@
 {
-  description = "wip-routine-connector";
+  description = "transFAIR";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
@@ -15,7 +15,7 @@
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          name = "routine-connector";
+          name = "transFAIR";
           overlays = [ (import rust-overlay) ];
           pkgs = import nixpkgs {
             inherit system overlays;
