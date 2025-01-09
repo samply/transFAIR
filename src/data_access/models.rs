@@ -1,7 +1,7 @@
 use fhir_sdk::r4b::resources::{Consent, Patient};
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Serialize, Deserialize, sqlx::Type)]
+#[derive(Clone, Default, Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
     Created = 1,
     _DataLoaded = 2,
@@ -10,7 +10,7 @@ pub enum RequestStatus {
     Error = 4,
 }
 
-#[derive(Default, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Clone, Default, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DataRequest {
     pub id: String,
     pub patient_id: String,

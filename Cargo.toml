@@ -26,3 +26,4 @@ build-data = "0.2.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+test-log = { version = "0.2.16", features = ["trace"] }

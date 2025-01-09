@@ -133,27 +133,53 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
 mod tests {
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
+    use tracing::debug;
+    use test_log::test;
 
     use crate::data_access::models::DataRequest;
-    
-    async fn post_data_request() -> DataRequest {        
-        let bytes = include_bytes!("../docs/examples/data_request.json");        
-        let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
 
+    const BASE_API_URL: &str = "http://localhost:8080/requests";
+
+    async fn get_all_data_requests() -> Vec<DataRequest> {
         let response = reqwest::Client::new()
-            .post(format!("http://localhost:8080/requests"))
-            .json(json)
+            .get(BASE_API_URL)
             .send()
             .await
-            .expect("POST endpoint (/requests) should give a valid response");
-        assert_eq!(response.status(), StatusCode::CREATED);
-        response.json().await.unwrap()
+            .expect("GET endpoint (/requests) should give a valid response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let data_requests = response.json::<Vec<DataRequest>>().await.unwrap();
+        debug!("number of rows in data_requests table: {}", data_requests.len());
+        data_requests
+    }
+    
+    async fn post_data_request() -> DataRequest {
+        let data_requests = get_all_data_requests().await;
+        if data_requests.len() > 0 {
+            debug!("a data request for this patient already exists, returning the saved one");
+            data_requests[0].clone()
+        } else {
+            debug!("creating a new data request");
+            let bytes = include_bytes!("../docs/examples/data_request.json");        
+            let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
+
+            let response = reqwest::Client::new()
+                .post(BASE_API_URL)
+                .json(json)
+                .send()
+                .await
+                .expect("POST endpoint (/requests) should give a valid response");
+            assert_eq!(response.status(), StatusCode::CREATED);
+            response.json().await.unwrap()
+        }        
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn get_data_request() {
         let data_request = post_data_request().await;
-        let url = format!("http://localhost:8080/requests/{}", data_request.id);
+        debug!("data request id: {}", data_request.id);
+        
+        let url = format!("{BASE_API_URL}/{}", data_request.id);
 
         let response = reqwest::Client::new()
             .get(url)
