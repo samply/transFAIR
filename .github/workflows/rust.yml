@@ -19,7 +19,7 @@ jobs:
       statuses: read
     with:
         image-prefix: "samply/"
-        components: '[ "routine-connector" ]'
+        components: '[ "transFAIR" ]'
         architectures: '[ "amd64" ]'
         test-via-script: true
         push-to: ${{ (github.ref_protected == true || github.event_name == 'workflow_dispatch') && 'dockerhub' || 'none' }}

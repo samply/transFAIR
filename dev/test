@@ -9,7 +9,7 @@ function start_bg() {
 
   # Test Config Setup
   export INSTITUTE_TTP_URL="http://localhost:8081";
-  export INSTITUTE_TTP_API_KEY="routine-connector-password";
+  export INSTITUTE_TTP_API_KEY="transFAIR-password";
   export PROJECT_ID_SYSTEM="PROJECT_1_ID"
   export FHIR_REQUEST_URL="http://localhost:8085"
   export FHIR_INPUT_URL="http://localhost:8086"
@@ -38,8 +38,8 @@ function start_bg() {
       fi
     done
   done
-  chmod +x artifacts/binaries-amd64/routine-connector
-  artifacts/binaries-amd64/routine-connector &
+  chmod +x artifacts/binaries-amd64/transFAIR
+  artifacts/binaries-amd64/transFAIR &
   sleep 10
 }
 
