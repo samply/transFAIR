@@ -20,22 +20,23 @@ pub struct Config {
     // Definition of the fhir server and credentials used for communicating data requests to the dic
     #[clap(long, env)]
     pub fhir_request_url: Url,
-    #[clap(long, env)]
-    pub fhir_request_credentials: Option<Auth>,
+    #[clap(long, env, default_value = "")]
+    pub fhir_request_credentials: Auth,
     // Definition of the fhir server and credentials used for reading data from the dic
     #[clap(long, env)]
     pub fhir_input_url: Url,
-    #[clap(long, env)]
-    pub fhir_input_credentials: Option<Auth>,
+    #[clap(long, env, default_value = "")]
+    pub fhir_input_credentials: Auth,
     // Definition of the fhir server and credentials used for adding data to the project data
     #[clap(long, env)]
     pub fhir_output_url: Url,
-    #[clap(long, env)]
-    pub fhir_output_credentials: Option<Auth>,
+    #[clap(long, env, default_value = "")]
+    pub fhir_output_credentials: Auth,
 }
 
 #[derive(Debug, Clone)]
 pub enum Auth {
+    None,
     Basic {
         user: String,
         pw: String,
@@ -46,6 +47,9 @@ impl FromStr for Auth {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Ok(Self::None);
+        }
         let (user, pw) = s.split_once(":").ok_or("Credentials should be in the form of '<user>:<pw>'")?;
         Ok(Self::Basic { user: user.to_owned(), pw: pw.to_owned() })
     }
