@@ -43,17 +43,21 @@ In the case of base configuration, transFAIR will check every 60 seconds for upd
 
 ### Transformation
 
-To enable transformation of resource between the `SOURCE` and `TARGET`, set the `PROFILE` to the desired profile (defaults to `mii2bbmri`):
+To enable transformation of resource between the `SOURCE` and `TARGET`, set the `PROFILE` to the desired profile (defaults to `fhircopy`):
 
 - `fhircopy` - transfer FHIR resources Organization, Condition, Observation, Specimen, as well as Patients referenced in them unchanged from one FHIR server to another. This can be used to perform filtering and/or pseudonymisation across servers.
-- `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset).
-- `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/façade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead.
-- `dicom2fhir` - load data from a DICOM source, transform into ImagingStudy resources and load into a target FHIR store.
-- `amr` - load data from AMR (ECDC antimicrobial resistance) CSV files, transform into Patient and Observation resources and load into a target FHIR store.
 
-The transformation is quite complex and therefore worth of it's own project: [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch)
+Currently we are in the progress of integrating the different transformation modes, into one transformation repository [https://github.com/samply/transFAIR-transformations](https://github.com/samply/transFAIR-transformations). Until this is done you will find the different transformations in their respective repositories:
+
+- `bbmri2mii` - load biosample information from a BBMRI-ERIC Bridgehead, transform into MII Core Dataset and load into a target (e.g. FHIR Store with MII Core Dataset). (see [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch))
+- `mii2bbmri` - load the MII Core Dataset (usually from a FHIR server/façade providing the MII Core Dataset), transform in BBMRI-ERIC profiles and load into BBMRI-ERIC Bridgehead. (see [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch))
+- `dicom2fhir` - load data from a DICOM source, transform into ImagingStudy resources and load into a target FHIR store. (see [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch))
+- `amr` - load data from AMR (ECDC antimicrobial resistance) CSV files, transform into Patient and Observation resources and load into a target FHIR store. (see [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch))
+- `odbs2fhir` - load data from oncological core data set XML files, transform into [dktk fhir profiles](https://simplifier.net/oncology/~resources?category=Profile) (see [https://github.com/samply/obds2fhir](https://github.com/samply/obds2fhir))
+
 
 #### Profile: dicom2fhir
+
 | Variable                  | Description                                                   | Default |
 |---------------------------|---------------------------------------------------------------|---------|
 | `IMGMETA_FROM_FHIR`       | Get DICOM metadata from the `SOURCE` datastore                | true    |
@@ -68,26 +72,26 @@ The transformation is quite complex and therefore worth of it's own project: [ht
 
 ### Linkage with external Sources
 
-TransFAIR is able to link already existing data in `TARGET` with incoming data from `SOURCE` by communicating with an existing `INSTITUTE_TTP`.
+TransFAIR is able to link already existing data in `TARGET` with incoming data from `SOURCE` by communicating with an existing `TTP` (trusted third party, e.g. a [Mainzelliste](https://mainzelliste.de)).
 For this purpose, TransFAIR will open a rest api on the `/requests` endpoint (see: API).
-On incoming requests (at least contains a FHIR patient resource) TransFAIR communicates with the `INSTITUTE_TTP` to generate two pseudonyms
+On incoming requests (at least contains a FHIR patient resource) TransFAIR communicates with the `TTP` to generate two pseudonyms
 
 - a `PROJECT_PSEUDONYM`, used for storage in `TARGET` 
 - a `EXCHANGE_PSEUDONYM`, used for communication with the external source and stored in `REQUEST` 
 
 and pushes the pseudonymized patient resource with only the `EXCHANGE_PSEUDONYM` to `REQUEST.`
 
-The external source then needs to fetch new requests from `REQUEST`, resolve `EXCHANGE_PSEUDONYM` through `INSTITUTE_TTP` to it's own and push available data to `SOURCE`.
+The external source then needs to fetch new requests from `REQUEST`, resolve `EXCHANGE_PSEUDONYM` through `TTP` to it's own and push available data to `SOURCE`.
 
-| Variable                | Description                                                              | Default |
-|-------------------------|--------------------------------------------------------------------------|---------|
-| `INSTITUTE_TTP_URL`     | The HTTP address of the sites TTP                                        | -       |
-| `INSTITUTE_TTP_API_KEY` | The api key to use for authentication with the TTP                       | -       |
-| `EXCHANGE_ID_SYSTEM`    | Id System in the ttp used to identify patient in the REQUEST_FHIR Server | -       |
-| `PROJECT_ID_SYSTEM`     | Id System in the ttp used to identy data in the TARGET system            | -       |
-| `REQUEST_URL`           | HTTP Address of the `REQUEST` datastore                                  | -       |
-| `REQUEST_USERNAME`      | (Optional) Username for basic authentication                             | -       |
-| `REQUEST_PASSWORD`      | (Optional) Password for basic authentication                             | -       |
+| Variable             | Description                                                              | Default |
+|----------------------|--------------------------------------------------------------------------|---------|
+| `TTP_URL`            | The HTTP address of the sites `TTP`                                      | -       |
+| `TTP_API_KEY`        | The api key to use for authentication with the TTP                       | -       |
+| `EXCHANGE_ID_SYSTEM` | Id System in the ttp used to identify patient in the REQUEST_FHIR Server | -       |
+| `PROJECT_ID_SYSTEM`  | Id System in the ttp used to identy data in the TARGET system            | -       |
+| `REQUEST_URL`        | HTTP Address of the `REQUEST` datastore                                  | -       |
+| `REQUEST_USERNAME`   | (Optional) Username for basic authentication                             | -       |
+| `REQUEST_PASSWORD`   | (Optional) Password for basic authentication                             | -       |
 
 ## API
 
@@ -105,7 +109,7 @@ Create a new linkage request providing a FHIR [patient](https://www.hl7.org/fhir
     }
 ```
 
-TransFAIR will request `EXCHANGE_ID` and `PROJECT_ID` from the `INSTITUTE_TTP` and on success return
+TransFAIR will request `EXCHANGE_ID` and `PROJECT_ID` from the `TTP` and on success return
 
 ```
     201 CREATED
@@ -156,23 +160,11 @@ You can run the integration tests against your running application using `cargo 
 
 :construction: This tool is still under intensive development. Features on the roadmap are:
 
-- [ ] Pseudonymisation
-- [ ] Double-check specimen type mappings 
-- [ ] Smoking status mappings
-- [ ] Body weight mapping
-- [ ] BMI mappings
-- [ ] Fasting status mappings
-- [ ] Log unmappable codes
-- [ ] Implement Beacon as a target format
-- [ ] Additional code systems for diagnoses beyond ICD10GM
-- [ ] Decide on using allowlist/denylist
-- [ ] Decide on identifiers instead of IDs in references
-- [ ] Incremental transfer, dealing with overwriting
-- [ ] Integration tests
-- [ ] Scheduler
-- [ ] Support standards beyond [HL7 FHIR](https://hl7.org/fhir/), e.g. [OMOP](https://www.ohdsi.org/data-standardization/) and other well-known SQL, CSV and XML schemata.
+- [ ] Support for Greifswald THS ([https://www.ths-greifswald.de/](https://www.ths-greifswald.de/)) Tools as alternative `TTP`
+- [ ] Integration of [https://github.com/samply/transFAIR-batch](https://github.com/samply/transFAIR-batch)
+- [ ] Extended integration tests
 
-To find out if TransFAIR can serve your needs today, we recommend you contact us to become a pilot site.
+If you have further use cases, feel free to [contact us](mailto:t.brenner@dkfz-heidelberg.de).
 
 ## License
 
