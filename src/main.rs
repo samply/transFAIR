@@ -156,6 +156,10 @@ mod tests {
     async fn post_data_request() -> DataRequest {
         let data_requests = get_all_data_requests().await;
         if data_requests.len() > 0 {
+            // NOTE: the tests always use a hard-coded patient from the
+            // ../docs/examples/data_request.json file, so this test is fine.
+            // Even if we find a single row in the data_requests table, it is
+            // for this one single patient only.
             debug!("a data request for this patient already exists, returning the saved one");
             data_requests[0].clone()
         } else {
