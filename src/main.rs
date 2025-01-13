@@ -133,8 +133,6 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
 mod tests {
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
-    use tracing::debug;
-    use test_log::test;
 
     use crate::data_access::models::DataRequest;
 
@@ -149,7 +147,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let data_requests = response.json::<Vec<DataRequest>>().await.unwrap();
-        debug!("number of rows in data_requests table: {}", data_requests.len());
+        dbg!("number of rows in data_requests table: {}", data_requests.len());
         data_requests
     }
     
@@ -160,10 +158,10 @@ mod tests {
             // ../docs/examples/data_request.json file, so this test is fine.
             // Even if we find a single row in the data_requests table, it is
             // for this one single patient only.
-            debug!("a data request for this patient already exists, returning the saved one");
+            dbg!("a data request for this patient already exists, returning the saved one");
             data_requests[0].clone()
         } else {
-            debug!("creating a new data request");
+            dbg!("creating a new data request");
             let bytes = include_bytes!("../docs/examples/data_request.json");        
             let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
 
@@ -178,11 +176,11 @@ mod tests {
         }        
     }
 
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn get_data_request() {
         let data_request = post_data_request().await;
-        debug!("data request id: {}", data_request.id);
-        
+        dbg!("data request id: {}", &data_request.id);
+
         let url = format!("{BASE_API_URL}/{}", data_request.id);
 
         let response = reqwest::Client::new()
