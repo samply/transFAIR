@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, patient_id, project_id, status as \"status: _\" FROM data_requests;",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "patient_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "project_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status: _",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2fe5f2d43979b0feb1eeb83d7a31ec30f125caf2d5d50fa764cca6077d39c8c7"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO data_requests (id, patient_id, project_id, status) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "1f37c9494de9627bfc759c9b7453d67e57e1cd3ac021fa000fd84a9d11688c24"
+}
