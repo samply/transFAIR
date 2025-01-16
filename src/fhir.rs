@@ -12,27 +12,25 @@ use crate::{config::Auth, data_access::models::DataRequestPayload, CONFIG};
 #[derive(Clone, Debug)]
 pub struct FhirServer {
     url: Url,
-    auth: Option<Auth>,
+    auth: Auth,
     client: Client,
 }
 
 trait ClientBuilderExt {
-    fn add_auth(self, auth: &Option<Auth>) -> Self;
+    fn add_auth(self, auth: &Auth) -> Self;
 }
 
 impl ClientBuilderExt for reqwest::RequestBuilder {
-    fn add_auth(self, auth: &Option<Auth>) -> Self {
-        let Some(auth) = auth else {
-            return self
-        };
+    fn add_auth(self, auth: &Auth) -> Self {
         match auth {
             Auth::Basic { user, pw } => self.basic_auth(user, Some(pw)),
+            Auth::None => self,
         }
     }
 }
 
 impl FhirServer {
-    pub fn new(url: Url, auth: Option<Auth>) -> Self {
+    pub fn new(url: Url, auth: Auth) -> Self {
         Self { url, auth, client: Client::new() }
     }
     
