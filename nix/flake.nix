@@ -19,7 +19,12 @@
         pkgs = import nixpkgs { inherit system overlays; };
         rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile
           ./rust-toolchain.toml;
-        nativeBuildInputs = with pkgs; [ rustToolchain pkg-config lldb ];
+        nativeBuildInputs = with pkgs; [
+          rustToolchain
+          pkg-config
+          lldb
+          cargo-watch
+        ];
         buildInputs = with pkgs; [ openssl sqlite sqlx-cli ];
       in rec {
         # nix develop
