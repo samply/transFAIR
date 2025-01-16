@@ -4,10 +4,13 @@ use axum::{routing::{get, post}, Router};
 use clap::Parser;
 use config::Config;
 use fhir::FhirServer;
+use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
+use futures_util::future::JoinAll;
 use tracing::{debug, error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
+use ttp::Ttp;
 
 use crate::requests::{create_data_request, list_data_requests, get_data_request};
 
@@ -19,14 +22,6 @@ mod ttp;
 
 static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
-
-trait CheckAvailability {
-    async fn check_availability(&self) -> bool;
-}
-
-trait CheckIdTypeAvailable {
-    async fn check_idtype_available(&self, idtype: &str) -> bool;
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -117,19 +112,102 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
     // TODO: Check if we can use a smarter logic to fetch all not fetched data
     let fetch_start_date = chrono::prelude::Utc::now();
     let query_from_date = fetch_start_date - chrono::Duration::days(1);
-    let new_data = input_fhir_server.pull_new_data(
+    let mut new_data = input_fhir_server.pull_new_data(
         query_from_date.naive_local().into()
     ).await?;
     if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
-        output_fhir_server.post_data( new_data).await?;
+        for entry in new_data.entry.iter_mut().flatten() {
+            let Some(resource) = &mut entry.resource else {
+                error!("Received invalid bundle for data request");
+                continue;
+            };
+
+            let entry_bundle = match resource {
+                Resource::Bundle(ref mut bundle) => bundle,
+                _ => continue,
+            };
+
+            let Some(entry_bundle_identifier) = entry_bundle.id.clone() else {
+                error!("Received bundle without identifier. No link to data request is possible.");
+                continue;
+            };
+
+            let mut linkage_results = None;
+            if let Some(ttp) = &CONFIG.ttp {
+                linkage_results = Some(replace_exchange_identifiers(entry_bundle, ttp).await);
+            };
+
+            // TODO: integrate transformation using transfair-batch here
+
+            output_fhir_server.post_data(entry_bundle.clone()).await?; // NOTE: were must be a better they than cloning this
+
+            log_linkage_results(entry_bundle_identifier, linkage_results);
+        }
+
     }
     Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }
 
+fn log_linkage_results(_bundle_identifier: String, _linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>) {
+    todo!("Implementation of logging for data fetching is missing!")
+}
+
+
+#[derive(Debug, thiserror::Error)]
+enum LinkageError {
+    #[error("The provided resource didn't contain a reference.")]
+    NoReference,
+    #[error("The resource provided is of unknown type.")]
+    UnknownResource,
+    #[error("entry in response did not contain a resource.")]
+    EntryWithoutResource,
+    #[error("Can't link resource due to missing identifier")]
+    MissingIdentifier,
+    #[error("Identifier for linkage didn't contain a system")]
+    IdentifierWithoutSystem,
+    #[error("Identifier for linkage was not of configured type")]
+    WrongIdentifierType
+}
+
+async fn replace_exchange_identifiers(new_data: &mut Bundle, ttp: &Ttp) -> Vec<Result<ResourceType, LinkageError>> {
+    new_data.entry.iter_mut().flatten().map(|entry| async {
+        let Some(resource) = &mut entry.resource else {
+            return Err(LinkageError::EntryWithoutResource)
+        };
+
+        let reference = match resource {
+            Resource::Consent(consent) => match consent.patient.as_mut() {
+                Some(patient) => patient,
+                None => return Err(LinkageError::NoReference)
+            },
+            Resource::Condition(ref mut condition) => &mut condition.subject,
+            _ => return Err(LinkageError::UnknownResource)
+        };
+
+        let Some(identifier) = &mut reference.identifier else {
+            return Err(LinkageError::MissingIdentifier)
+        };
+
+        let Some(system) = &mut identifier.system else {
+            return Err(LinkageError::IdentifierWithoutSystem)
+        };
+
+        if system == &CONFIG.exchange_id_system {
+            *system = ttp.project_id_system.clone();
+            // TODO: Read value from database
+            identifier.value = Some(String::new());
+            Ok(resource.resource_type())
+        } else {
+            Err(LinkageError::WrongIdentifierType)
+        }
+    }).collect::<JoinAll<_>>().await
+}
+
 #[cfg(test)]
 mod tests {
+    use fhir_sdk::r4b::resources::Bundle;
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
     
@@ -161,4 +239,27 @@ mod tests {
             .expect("GET endpoint (/requests/id) should give a valid response");
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn import_example_data() {
+        let data_request = post_data_request().await;
+        let bytes = include_bytes!("../docs/examples/example_input_data.json");
+        let mut json = serde_json::from_slice::<Bundle>(bytes).unwrap();
+
+        json.id = dbg!(Some(data_request.id.clone()));
+
+        let response = reqwest::Client::new()
+            .put(format!("http://localhost:8086/fhir/Bundle/{}", data_request.id.clone()))
+            .json(&json)
+            .header("Content-Type", "application/fhir+json")
+            .send()
+            .await
+            .expect("POST to (/fhir/Bundle) should given a valid response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let response_json = response.json::<Bundle>().await.unwrap();
+        assert_eq!(response_json.id, Some(data_request.id.clone()))
+
+
+    }
+
 }

@@ -41,7 +41,7 @@
                 },
                 "subject": {
                     "identifier": {
-                        "system": "DIZ_ID",
+                        "system": "SESSION_ID",
                         "value": "005TY0EC"
                     }
                 }
@@ -87,7 +87,7 @@
                 },
                 "subject": {
                     "identifier": {
-                        "system": "DIZ_ID",
+                        "system": "SESSION_ID",
                         "value": "005TY0EC"
                     }
                 }
