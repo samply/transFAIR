@@ -17,7 +17,7 @@ services:
       ML_DB_USER: mainzelliste
       ML_DB_HOST: mainzelliste-db
       ML_DB_PASS: "${ML_DB_PASS:-my-secret-db-password}"
-      ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE:-routine-connector-password}"
+      ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE:-transFAIR-password}"
       ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE:-diz-password}"
       ML_LOG_LEVEL: "${ML_LOG_LEVEL:-info}"
     configs:
