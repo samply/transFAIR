@@ -35,7 +35,7 @@ pub async fn create_data_request(
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let mut consent = payload.consent;
     let mut patient = payload.patient;
-    let mut project_id = "";
+    let mut project_id = "DEFAULT_PROJECT_ID";
 
     if let Some(ttp) = &CONFIG.ttp {
         project_id = &ttp.project_id_system;
@@ -66,14 +66,12 @@ pub async fn create_data_request(
     }
 
     // TODO: check if this id, project_id combination exists in the DB (and then only post the request)
-    let optional_patient_id = patient.id.clone();
-    if optional_patient_id.is_none() {
+    let Some(patient_id) = patient.id.clone() else {
         let err_str = format!("Couldn't find a patient without a valid id!");
         let err_tuple = (StatusCode::BAD_REQUEST,err_str);
         return Err(err_tuple.into());
-    }
+    };
 
-    let patient_id = optional_patient_id.unwrap();
     debug!("patient id: {patient_id}");
     if exists(&database_pool, &patient_id, project_id).await {
         let err_str = format!("A request for a patient {} in the project {} has already been generated!", patient_id, project_id);
@@ -117,14 +115,14 @@ pub async fn list_data_requests(
                 "Unable to fetch data requests from database!",
             )
         })
-        .map(|dr| Json(dr))
+        .map(Json)
 }
 
 // GET /requests/<request-id>; Gets the Request specified by id in Path
 pub async fn get_data_request(
     State(database_pool): State<Pool<Sqlite>>,
     Path(request_id): Path<String>,
-) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
+) -> Result<Json<DataRequest>, (StatusCode, String)> {
     debug!("Information on data request {} requested.", request_id);
     let data_request = get_by_id(&database_pool, &request_id)
         .await
@@ -137,13 +135,12 @@ pub async fn get_data_request(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Unable to fetch data request with id {}", request_id),
             )
-        })
-        .unwrap()
-        .map(|dr| Json(dr));
+        })?
+        .map(Json);
 
     data_request.ok_or((
         StatusCode::NOT_FOUND,
-        "Couldn't retrieve data request with id",
+        "Couldn't retrieve data request with id".to_string(),
     ))
 }
 
