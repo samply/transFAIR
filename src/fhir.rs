@@ -101,13 +101,13 @@ impl FhirServer {
     }
 
     // post a fhir bundle to a specified fhir server
-    pub async fn post_data(&self, bundle: Bundle) -> Result<reqwest::Response, String> {
-        let bundle_endpoint = format!("{}fhir", self.url);
+    pub async fn post_data(&self, bundle: &Bundle) -> Result<reqwest::Response, String> {
+        let bundle_endpoint = dbg!(format!("{}fhir", self.url));
         debug!("Posting data to output fhir server: {}", bundle_endpoint);
         self.client
             .post(bundle_endpoint)
             .add_auth(&self.auth)
-            .json(&bundle)
+            .json(dbg!(&bundle))
             .send()
             .await
             .map_err(|err| format!("Unable to post data to output fhir server: {}", err))
@@ -118,7 +118,6 @@ pub trait PatientExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
     fn add_id_request(self, id: String) -> axum::response::Result<Self>;
     fn get_exchange_identifier(&self) -> Option<&Identifier>;
-    fn contains_exchange_identifier(&self) -> bool;
 }
 
 impl PatientExt for Patient {
@@ -148,13 +147,6 @@ impl PatientExt for Patient {
             .iter()
             .flatten()
             .find(|x| x.system.as_ref() == Some(&CONFIG.exchange_id_system))
-    }
-
-    fn contains_exchange_identifier(&self) -> bool {
-        self.identifier
-            .iter()
-            .flatten()
-            .any(|x| x.system.as_ref() == Some(&CONFIG.exchange_id_system))
     }
 
     fn pseudonymize(self) -> axum::response::Result<Self> {

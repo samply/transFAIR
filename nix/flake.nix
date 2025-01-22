@@ -42,7 +42,7 @@
           EXCHANGE_ID_SYSTEM = "SESSION_ID";
           PROJECT_ID_SYSTEM = "PROJECT_1_ID";
           DATABASE_URL = "sqlite://data_requests.sql?mode=rwc";
-          RUST_LOG = "warn,wip_routine_connector=debug";
+          RUST_LOG = "info";
           no_proxy = "localhost";
           # Environment for Mainzelliste
           ML_DB_PASS = "my-secret-db-password";
