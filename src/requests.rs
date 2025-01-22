@@ -1,13 +1,13 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{resources::{Consent, Patient}, types::Reference};
+use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
 use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::{FhirServer, PatientExt}, CONFIG};
+use crate::{fhir::{FhirServer, PatientExt}, LinkageError, CONFIG};
 
 static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
     FhirServer::new(CONFIG.fhir_request_url.clone(), CONFIG.fhir_request_credentials.clone())
@@ -40,6 +40,7 @@ pub async fn create_data_request(
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let mut consent = payload.consent;
     let mut patient = payload.patient;
+
     if let Some(ttp) = &CONFIG.ttp {
         patient = patient
           .add_id_request(CONFIG.exchange_id_system.clone())?
@@ -50,14 +51,15 @@ pub async fn create_data_request(
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         consent = ttp.document_patient_consent(consent, &patient).await?;
         trace!("TTP returned this consent for Patient {:?}", consent);
-    } else {
-        // ohne) das vorhandensein des linkbaren Pseudonym überprüft werden (identifier existiert, eventuell mit Wert in Konfiguration abgleichen?)
-        if !patient.contains_exchange_identifier() {
-            return Err(
-                (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &CONFIG.exchange_id_system)).into()
-            );
-        }
     }
+
+    // ensure that we have at least one identifier with which we can link
+    let Some(exchange_identifier) = patient.get_exchange_identifier().cloned() else {
+        return Err(
+            (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &CONFIG.exchange_id_system)).into()
+        );
+    };
+
     patient = patient.pseudonymize()?;
     consent = link_patient_consent(&consent, &patient)?;
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden 
@@ -67,15 +69,15 @@ pub async fn create_data_request(
     }).await?;
 
     let data_request = DataRequest {
-        id: dbg!(data_request_id),
+        id: data_request_id,
         status: RequestStatus::Created,
         message: None
     };
 
     // storage for associated project id
     let sqlite_query_result = sqlx::query!(
-        "INSERT INTO data_requests (id, status, message) VALUES ($1, $2, $3)",
-        data_request.id, data_request.status, ""
+        "INSERT INTO data_requests (id, status, message, exchange_id) VALUES ($1, $2, $3, $4)",
+        data_request.id, data_request.status, "Data Request created!", exchange_identifier.value
     ).execute(&database_pool).await.map_err(|e| {
         error!("Unable to persist data request to database. {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to persist data request to database.")
@@ -129,4 +131,37 @@ fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent,
     };
     linked_consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
     Ok(linked_consent)
+}
+
+pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<(Option<ResourceType>, Result<(), LinkageError>)>>, database_pool: &Pool<Sqlite>) {
+    let Some(linkage_results) = linkage_results else {
+        let message_success_without_linkage = format!("Transferred data from input to output FHIR server without linkage.");
+        let _ = sqlx::query!(
+            "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
+            RequestStatus::Success, message_success_without_linkage, bundle_identifier
+        ).fetch_optional(database_pool).await;
+        return;
+    };
+    let result_summary = linkage_results.iter().map(|partial_result| {
+            let Some(resource_type) = &partial_result.0 else {
+                return format!("Invalid resource, unable to extract ResourceType");
+            };
+            debug!("{}", resource_type);
+            match &partial_result.1 {
+                Ok(_) => format!("{}(),", resource_type),
+                Err(error) => format!("{}({}),", resource_type, error),
+            }
+        }).collect::<Vec<String>>().join(",");
+
+    debug!("{}", result_summary);
+
+    let result_status = match linkage_results.iter().any(|partial_result| partial_result.1.is_err()) {
+        true => RequestStatus::Error,
+        false => RequestStatus::Success,
+    };
+
+    let _ = sqlx::query!(
+        "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
+        result_status, result_summary, bundle_identifier
+    ).fetch_optional(database_pool).await;
 }

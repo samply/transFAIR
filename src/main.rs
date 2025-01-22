@@ -6,7 +6,8 @@ use config::Config;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
 use once_cell::sync::Lazy;
-use sqlx::SqlitePool;
+use requests::update_data_request;
+use sqlx::{Pool, Sqlite, SqlitePool};
 use futures_util::future::JoinAll;
 use tracing::{debug, error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -69,6 +70,8 @@ async fn main() -> ExitCode {
         }
     }
 
+    let database_pool_for_axum = database_pool.clone();
+
     tokio::spawn(async move {
         const RETRY_PERIOD: Duration = Duration::from_secs(60);
         let input_fhir_server =  FhirServer::new(
@@ -81,7 +84,7 @@ async fn main() -> ExitCode {
         );
         loop {
             // TODO: Persist the updated data in the database
-            match fetch_data(&input_fhir_server, &output_fhir_server).await {
+            match fetch_data(&input_fhir_server, &output_fhir_server, &database_pool).await {
                 Ok(status) => info!("{}", status),
                 Err(error) => warn!("Failed to fetch project data: {error}. Will try again in {}s", RETRY_PERIOD.as_secs())
             }
@@ -94,7 +97,7 @@ async fn main() -> ExitCode {
         .route("/", post(create_data_request))
         .route("/", get(list_data_requests))
         .route("/{request_id}", get(get_data_request))
-        .with_state(database_pool);
+        .with_state(database_pool_for_axum);
 
     let app = Router::new()
         .nest("/requests", request_routes);
@@ -108,14 +111,14 @@ async fn main() -> ExitCode {
 }
 
 // Pull data from input_fhir_server and push it to output_fhir_server
-async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer) -> Result<String, String> {
+async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer, database_pool: &Pool<Sqlite>) -> Result<String, String> {
     // TODO: Check if we can use a smarter logic to fetch all not fetched data
-    let fetch_start_date = chrono::prelude::Utc::now();
+    let fetch_start_date = dbg!(chrono::prelude::Utc::now());
     let query_from_date = fetch_start_date - chrono::Duration::days(1);
     let mut new_data = input_fhir_server.pull_new_data(
         query_from_date.naive_local().into()
     ).await?;
-    if new_data.entry.is_empty() {
+    if dbg!(new_data.entry.is_empty()) {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
         for entry in new_data.entry.iter_mut().flatten() {
@@ -129,31 +132,30 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 _ => continue,
             };
 
-            let Some(entry_bundle_identifier) = entry_bundle.id.clone() else {
+            if entry_bundle.id.is_none() {
                 error!("Received bundle without identifier. No link to data request is possible.");
                 continue;
-            };
+            }
 
             let mut linkage_results = None;
             if let Some(ttp) = &CONFIG.ttp {
-                linkage_results = Some(replace_exchange_identifiers(entry_bundle, ttp).await);
+                linkage_results = Some(replace_exchange_identifiers(entry_bundle, ttp, &database_pool).await);
             };
 
             // TODO: integrate transformation using transfair-batch here
+            // FIXME: Error seems to happen here as no data is inserted
+            match output_fhir_server.post_data(&entry_bundle).await{ // NOTE: were must be a better they than cloning this
+                Ok(response) => info!("Received a response: {}", response.text().await.unwrap()),
+                Err(error) => error!("Received the following error: {}", error),
+            };
 
-            output_fhir_server.post_data(entry_bundle.clone()).await?; // NOTE: were must be a better they than cloning this
-
-            log_linkage_results(entry_bundle_identifier, linkage_results);
+            // FIXME: for some reason result is not written to database
+            update_data_request(dbg!(&entry_bundle.id.as_ref().unwrap()), dbg!(linkage_results), &database_pool).await;
         }
 
     }
     Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
 }
-
-fn log_linkage_results(_bundle_identifier: String, _linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>) {
-    todo!("Implementation of logging for data fetching is missing!")
-}
-
 
 #[derive(Debug, thiserror::Error)]
 enum LinkageError {
@@ -168,39 +170,52 @@ enum LinkageError {
     #[error("Identifier for linkage didn't contain a system")]
     IdentifierWithoutSystem,
     #[error("Identifier for linkage was not of configured type")]
-    WrongIdentifierType
+    WrongIdentifierType,
+    #[error("Unable to link identifier to any data request")]
+    IdentifierNotLinkable
 }
 
-async fn replace_exchange_identifiers(new_data: &mut Bundle, ttp: &Ttp) -> Vec<Result<ResourceType, LinkageError>> {
+async fn replace_exchange_identifiers(new_data: &mut Bundle, ttp: &Ttp, database_connection: &Pool<Sqlite>) -> Vec<(Option<ResourceType>, Result<(), LinkageError>)> {
+    let data_request_identifier = new_data.id.as_ref().unwrap().clone();
     new_data.entry.iter_mut().flatten().map(|entry| async {
         let Some(resource) = &mut entry.resource else {
-            return Err(LinkageError::EntryWithoutResource)
+            return (None, Err(LinkageError::EntryWithoutResource))
         };
 
         let reference = match resource {
             Resource::Consent(consent) => match consent.patient.as_mut() {
                 Some(patient) => patient,
-                None => return Err(LinkageError::NoReference)
+                None => return (Some(resource.resource_type()), Err(LinkageError::NoReference))
             },
             Resource::Condition(ref mut condition) => &mut condition.subject,
-            _ => return Err(LinkageError::UnknownResource)
+            Resource::Procedure(ref mut procedure) => &mut procedure.subject,
+            _ => return (Some(resource.resource_type()), Err(LinkageError::UnknownResource))
         };
 
         let Some(identifier) = &mut reference.identifier else {
-            return Err(LinkageError::MissingIdentifier)
+            return (Some(resource.resource_type()), Err(LinkageError::MissingIdentifier))
         };
 
         let Some(system) = &mut identifier.system else {
-            return Err(LinkageError::IdentifierWithoutSystem)
+            return (Some(resource.resource_type()), Err(LinkageError::IdentifierWithoutSystem))
         };
 
         if system == &CONFIG.exchange_id_system {
             *system = ttp.project_id_system.clone();
             // TODO: Read value from database
-            identifier.value = Some(String::new());
-            Ok(resource.resource_type())
+            // TODO: Write project_id in database
+            let result = sqlx::query!(
+                "SELECT project_id FROM data_requests WHERE id = $1",
+                data_request_identifier
+            ).fetch_optional(database_connection).await.unwrap(); //TODO @Jan, proper database error fixing
+            if let Some(patient_identifier) = result {
+                identifier.value = Some(patient_identifier.project_id);
+                (Some(resource.resource_type()), Ok(()))
+            } else {
+                return (Some(resource.resource_type()), Err(LinkageError::IdentifierNotLinkable))
+            }
         } else {
-            Err(LinkageError::WrongIdentifierType)
+            (Some(resource.resource_type()), Err(LinkageError::WrongIdentifierType))
         }
     }).collect::<JoinAll<_>>().await
 }
@@ -258,8 +273,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
         let response_json = response.json::<Bundle>().await.unwrap();
         assert_eq!(response_json.id, Some(data_request.id.clone()))
-
-
     }
 
 }
