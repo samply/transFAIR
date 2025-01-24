@@ -133,35 +133,30 @@ fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent,
     Ok(linked_consent)
 }
 
-pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<(Option<ResourceType>, Result<(), LinkageError>)>>, database_pool: &Pool<Sqlite>) {
+pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>, database_pool: &Pool<Sqlite>) -> sqlx::Result<()> {
     let Some(linkage_results) = linkage_results else {
         let message_success_without_linkage = format!("Transferred data from input to output FHIR server without linkage.");
-        let _ = sqlx::query!(
+        sqlx::query!(
             "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
             RequestStatus::Success, message_success_without_linkage, bundle_identifier
-        ).fetch_optional(database_pool).await;
-        return;
+        ).execute(database_pool).await?;
+        return Ok(());
     };
-    let result_summary = linkage_results.iter().map(|partial_result| {
-            let Some(resource_type) = &partial_result.0 else {
-                return format!("Invalid resource, unable to extract ResourceType");
-            };
-            debug!("{}", resource_type);
-            match &partial_result.1 {
-                Ok(_) => format!("{}(),", resource_type),
-                Err(error) => format!("{}({}),", resource_type, error),
-            }
-        }).collect::<Vec<String>>().join(",");
+    let result_summary = linkage_results.iter().map(|res| match res {
+        Ok(rt) => format!("{rt}()"),
+        Err(error) => format!("{error}"),
+    }).collect::<Vec<String>>().join("\n");
 
     debug!("{}", result_summary);
 
-    let result_status = match linkage_results.iter().any(|partial_result| partial_result.1.is_err()) {
+    let result_status = match linkage_results.iter().any(Result::is_err) {
         true => RequestStatus::Error,
         false => RequestStatus::Success,
     };
 
-    let _ = sqlx::query!(
+    sqlx::query!(
         "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
         result_status, result_summary, bundle_identifier
-    ).fetch_optional(database_pool).await;
+    ).execute(database_pool).await?;
+    Ok(())
 }
