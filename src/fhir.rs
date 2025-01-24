@@ -1,3 +1,4 @@
+use anyhow::Context;
 use chrono::NaiveDate;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
@@ -83,7 +84,7 @@ impl FhirServer {
     }
 
     // get data from fhir server that updated after a specified date
-    pub async fn pull_new_data(&self, last_update: NaiveDate) -> Result<Bundle, String> {
+    pub async fn pull_new_data(&self, last_update: NaiveDate) -> anyhow::Result<Bundle> {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Fetching new data from: {}", bundle_endpoint);
         let query = vec![("_lastUpdated", format!("gt{}", last_update))];
@@ -93,15 +94,15 @@ impl FhirServer {
             .query(&query)
             .send()
             .await
-            .map_err(|err| format!("Unable to query data from input server: {}", err))?;
+            .context("Unable to query data from input server")?;
         response
             .json::<Bundle>()
             .await
-            .map_err(|err| format!("Unable to response from input server: {}", err))
+            .context("Unable to response from input server")
     }
 
     // post a fhir bundle to a specified fhir server
-    pub async fn post_data(&self, bundle: &Bundle) -> Result<reqwest::Response, String> {
+    pub async fn post_data(&self, bundle: &Bundle) -> anyhow::Result<reqwest::Response> {
         let bundle_endpoint = dbg!(format!("{}fhir", self.url));
         debug!("Posting data to output fhir server: {}", bundle_endpoint);
         self.client
@@ -110,7 +111,7 @@ impl FhirServer {
             .json(dbg!(&bundle))
             .send()
             .await
-            .map_err(|err| format!("Unable to post data to output fhir server: {}", err))
+            .context("Unable to post data to output fhir server")
     }
 }
 
