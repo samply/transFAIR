@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, patient_id, project_id, status as \"status: _\" FROM data_requests WHERE id = $1;",
+  "query": "SELECT id, exchange_id, project_id, status as \"status: _\" FROM data_requests;",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Text"
       },
       {
-        "name": "patient_id",
+        "name": "exchange_id",
         "ordinal": 1,
         "type_info": "Text"
       },
@@ -25,14 +25,14 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
       false,
       false,
-      false,
+      true,
       false
     ]
   },
-  "hash": "70fc84c9208563c532b032048240bfe02de625e86432b89f3ef93a3244e7ba07"
+  "hash": "e643e3de461a0122755ad08cab4250e3067d0fd008a4c9af2ac80d7e839123cf"
 }

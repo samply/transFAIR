@@ -16,9 +16,7 @@ use crate::{
     data_access::{
         data_requests::{exists, get_all, get_by_id, insert},
         models::{DataRequest, DataRequestPayload},
-    },
-    fhir::{FhirServer, PatientExt},
-    CONFIG,
+    }, extensions::{option_str_ext::OptionStrExt, str_ext::StrExt}, fhir::{FhirServer, PatientExt}, CONFIG
 };
 
 static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
@@ -35,13 +33,14 @@ pub async fn create_data_request(
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let mut consent = payload.consent;
     let mut patient = payload.patient;
-    let mut project_id = "DEFAULT_PROJECT_ID";
+    let mut project_id = None;
 
     if let Some(ttp) = &CONFIG.ttp {
-        project_id = &ttp.project_id_system;
+        project_id = ttp.project_id_system.to_option_str();
+        // TODO: check if using project_id in this way is correct or not?
         patient = patient
             .add_id_request(CONFIG.exchange_id_system.clone())?
-            .add_id_request(project_id.into())?;
+            .add_id_request(project_id.unwrap().into())?;
         // pseudonymize the patient
         patient = ttp.request_project_pseudonym(&mut patient).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
@@ -74,7 +73,7 @@ pub async fn create_data_request(
 
     debug!("patient id: {patient_id}");
     if exists(&database_pool, &patient_id, project_id).await {
-        let err_str = format!("A request for a patient {} in the project {} has already been generated!", patient_id, project_id);
+        let err_str = format!("A request for a patient {} in the project {:?} has already been generated!", patient_id, project_id);
         let err_tuple = (StatusCode::BAD_REQUEST,err_str);
         return Err(err_tuple.into());
     }
@@ -86,7 +85,7 @@ pub async fn create_data_request(
         .post_data_request(DataRequestPayload { patient, consent })
         .await?;
 
-    let data_request = DataRequest::new(data_request_id, patient_id, project_id.into());
+    let data_request = DataRequest::new(data_request_id, patient_id, project_id.to_option_string());
     // storage for associated project id
     let last_insert_rowid = insert(&database_pool, &data_request)
     .await

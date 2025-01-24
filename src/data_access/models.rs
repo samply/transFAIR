@@ -13,16 +13,16 @@ pub enum RequestStatus {
 #[derive(Clone, Default, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DataRequest {
     pub id: String,
-    pub patient_id: String,
-    pub project_id: String,
+    pub exchange_id: String,
+    pub project_id: Option<String>,
     pub status: RequestStatus,
 }
 
 impl DataRequest {
-    pub fn new(id: String, patient_id: String, project_id: String) -> Self {
+    pub fn new(id: String, exchange_id: String, project_id: Option<String>) -> Self {
         Self {
             id,
-            patient_id,
+            exchange_id,
             project_id,
             status: RequestStatus::Created,
         }
