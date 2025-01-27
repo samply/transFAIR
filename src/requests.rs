@@ -33,14 +33,20 @@ pub async fn create_data_request(
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let mut consent = payload.consent;
     let mut patient = payload.patient;
-    let mut project_id = None;
+    let mut project_id: Option<&str> = None;
 
     if let Some(ttp) = &CONFIG.ttp {
         project_id = ttp.project_id_system.to_option_str();
-        // TODO: check if using project_id in this way is correct or not?
-        patient = patient
-            .add_id_request(CONFIG.exchange_id_system.clone())?
-            .add_id_request(project_id.unwrap().into())?;
+
+        if let Some(proj_id) = project_id {
+            patient = patient
+                .add_id_request(CONFIG.exchange_id_system.clone())?
+                .add_id_request(proj_id.into())?;
+        } else {            
+            patient = patient
+                .add_id_request(CONFIG.exchange_id_system.clone())?;
+        }
+        
         // pseudonymize the patient
         patient = ttp.request_project_pseudonym(&mut patient).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
@@ -64,7 +70,6 @@ pub async fn create_data_request(
         }
     }
 
-    // TODO: check if this id, project_id combination exists in the DB (and then only post the request)
     let Some(patient_id) = patient.id.clone() else {
         let err_str = format!("Couldn't find a patient without a valid id!");
         let err_tuple = (StatusCode::BAD_REQUEST,err_str);
@@ -72,6 +77,7 @@ pub async fn create_data_request(
     };
 
     debug!("patient id: {patient_id}");
+    // check if this patient_id (which is exchange_id), project_id combination does not exist in the DB (and then only post the request)
     if exists(&database_pool, &patient_id, project_id).await {
         let err_str = format!("A request for a patient {} in the project {:?} has already been generated!", patient_id, project_id);
         let err_tuple = (StatusCode::BAD_REQUEST,err_str);

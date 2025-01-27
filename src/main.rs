@@ -191,44 +191,4 @@ mod tests {
             .expect("GET endpoint (/requests/id) should give a valid response");
         assert_eq!(response.status(), StatusCode::OK);
     }
-
-    // #[tokio::test]
-    // async fn should_get_all_data_requests_rows() {
-    //     let db_pool = SqlitePool::connect(CONFIG.database_url.as_str())
-    //         .await
-    //         .map_err(|e| {
-    //             error!(
-    //                 "Unable to connect to database file {}. Error is: {}",
-    //                 CONFIG.database_url.as_str(),
-    //                 e
-    //             );
-    //             return;
-    //         })
-    //         .unwrap();
-
-    //     let all = get_all(&db_pool).await;
-    //     assert!(all.is_ok(), "result of getting all rows is an error");
-
-    //     let mut rows = all.unwrap();
-
-    //     if rows.len() == 0 {
-    //         dbg!("inserting first row..");
-    //         let dr = DataRequest::new("ID_1".into(), "EX_ID_1".into(), None);
-    //         let idr = insert(&db_pool, &dr).await;
-    //         assert!(idr.is_ok(), "could not insert a row with null project id");
-    //     } else if rows.len() == 1 {
-    //         dbg!("inserting second row..");
-    //         let dr = DataRequest::new("ID_2".into(), "EX_ID_2".into(), Some("PRJ_ID_1".into()));
-    //         let idr = insert(&db_pool, &dr).await;
-    //         assert!(idr.is_ok(), "could not insert a row with project id");
-    //     } else {
-    //         dbg!("fetching all rows again..");
-    //         let all_rows = get_all(&db_pool).await;
-    //         assert!(all_rows.is_ok(), "result of getting all rows is an error");
-
-    //         rows = all_rows.unwrap();
-    //     }
-
-    //     assert!(rows.len() > 0, "new rows could not be inserted");
-    // }
 }
