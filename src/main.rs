@@ -1,6 +1,7 @@
 use std::{process::ExitCode, time::Duration};
 
 use axum::{routing::{get, post}, Router};
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use config::Config;
 use fhir::FhirServer;
@@ -110,15 +111,15 @@ async fn main() -> ExitCode {
     ExitCode::from(0)
 }
 
+
 // Pull data from input_fhir_server and push it to output_fhir_server
 async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer, database_pool: &Pool<Sqlite>) -> anyhow::Result<String> {
-    // TODO: Check if we can use a smarter logic to fetch all not fetched data
-    let fetch_start_date = dbg!(chrono::prelude::Utc::now());
-    let query_from_date = fetch_start_date - chrono::Duration::days(1);
+    let fetch_start_date = extract_execution_time(database_pool).await;
     let mut new_data = input_fhir_server.pull_new_data(
-        query_from_date.naive_local().into()
+        fetch_start_date.naive_local().into()
     ).await?;
-    if dbg!(new_data.entry.is_empty()) {
+    let fetch_finish_date = chrono::prelude::Utc::now();
+    if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
         for entry in new_data.entry.iter_mut().flatten() {
@@ -143,20 +144,41 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
             };
 
             // TODO: integrate transformation using transfair-batch here
-            match output_fhir_server.post_data(&entry_bundle).await {
+
+            match output_fhir_server.post_data(&entry_bundle).await{
                 Ok(response) => info!("Received a response: {}", response.text().await.as_deref().unwrap_or("<invalid text>")),
                 Err(error) => error!("Received the following error: {error:#}"),
             };
 
-            // FIXME: for some reason result is not written to database
-            update_data_request(dbg!(&bundle_id), dbg!(linkage_results), &database_pool).await?;
+            update_data_request(&entry_bundle.id.as_ref().unwrap(), linkage_results, &database_pool).await.unwrap();
+
         }
 
     }
-    Ok(format!("Last fetch for new data executed at {}", fetch_start_date))
+    let finish_as_timestamp = fetch_finish_date.timestamp_millis();
+    let _ = sqlx::query!(
+        "UPDATE last_request SET execution_time = $1 WHERE id = 1", finish_as_timestamp
+    ).fetch_optional(database_pool).await;
+    Ok(format!("Last fetch for new data executed at {:?}", fetch_finish_date))
 }
 
-#[derive(Debug, thiserror::Error)]
+async fn extract_execution_time(database_pool: &Pool<Sqlite>) -> DateTime<Utc> {
+    let last_request = match sqlx::query!(
+        "SELECT execution_time FROM last_request"
+    ).fetch_optional(database_pool).await {
+       Ok(last_request) => last_request,
+       Err(_) => None,
+    };
+
+    match last_request {
+        Some(last_request) => chrono::DateTime::from_timestamp_millis(
+            last_request.execution_time
+        ).expect("Unable to parse value in last_request.execution_time to data time. Expecting milliseconds since last unix epoch."),
+        None => chrono::prelude::Utc::now(),
+    }
+}
+
+    #[derive(Debug, thiserror::Error)]
 enum LinkageError {
     #[error("entry in response did not contain a resource.")]
     EntryWithoutResource,
@@ -166,6 +188,8 @@ enum LinkageError {
     NoReference(ResourceType),
     #[error("Can't link resource due to missing identifier")]
     MissingIdentifier(ResourceType),
+    #[error("DataRequest didn't have identifier value for project id stored")]
+    MissingIdentifierValue(ResourceType),
     #[error("Identifier for linkage didn't contain a system")]
     IdentifierWithoutSystem(ResourceType),
     #[error("Identifier for linkage was not of configured type")]
@@ -210,14 +234,15 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
             Err(e) => return Ok(Err(e)),
         };
         ident.system = Some(ttp.project_id_system.clone());
-        // TODO: Read value from database
-        // TODO: Write project_id in database
         let result = sqlx::query!(
             "SELECT project_id FROM data_requests WHERE id = $1",
             data_request_identifier
         ).fetch_optional(database_connection).await?;
         if let Some(patient_identifier) = result {
-            ident.value = Some(patient_identifier.project_id);
+            let Some(project_id) = patient_identifier.project_id else {
+                return Ok(Err(LinkageError::MissingIdentifierValue(rt)));
+            };
+            ident.value = Some(project_id);
             Ok(Ok(rt))
         } else {
             Ok(Err(LinkageError::IdentifierNotLinkable(rt)))
@@ -227,14 +252,16 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
 
 #[cfg(test)]
 mod tests {
-    use fhir_sdk::r4b::resources::Bundle;
+    use core::time;
+
+    use fhir_sdk::r4b::resources::{Bundle, Resource};
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
-    
+
     use crate::requests::DataRequest;
 
-    async fn post_data_request() -> DataRequest {        
-        let bytes = include_bytes!("../docs/examples/data_request.json");        
+    async fn post_data_request() -> DataRequest {
+        let bytes = include_bytes!("../docs/examples/data_request.json");
         let json = &serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
 
         let response = reqwest::Client::new()
@@ -262,22 +289,69 @@ mod tests {
 
     #[tokio::test]
     async fn import_example_data() {
+        // create a new data request
         let data_request = post_data_request().await;
+
+        // prepare proper response by external site
         let bytes = include_bytes!("../docs/examples/example_input_data.json");
-        let mut json = serde_json::from_slice::<Bundle>(bytes).unwrap();
+        let json_string = String::from_utf8_lossy(bytes);
+        let json = serde_json::from_str::<Bundle>(
+            &json_string
+                .replace("<<data_request_id>>", &format!("{}", data_request.id.clone()))
+                .replace("<<session_id>>", &format!("{}", data_request.exchange_id))
+        ).unwrap();
 
-        json.id = dbg!(Some(data_request.id.clone()));
-
-        let response = reqwest::Client::new()
+        // deliver data from external site
+        reqwest::Client::new()
             .put(format!("http://localhost:8086/fhir/Bundle/{}", data_request.id.clone()))
             .json(&json)
             .header("Content-Type", "application/fhir+json")
             .send()
             .await
             .expect("POST to (/fhir/Bundle) should given a valid response");
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let response_json = response.json::<Bundle>().await.unwrap();
-        assert_eq!(response_json.id, Some(data_request.id.clone()))
-    }
 
+        // sleep for 70 seconds to ensure a fetch job runs during the test
+        tokio::time::sleep(time::Duration::from_secs(70)).await;
+
+        let procedure_response = reqwest::Client::new()
+            .get("http://localhost:8095/fhir/Procedure")
+            .send()
+            .await.unwrap()
+            .json::<Bundle>()
+            .await.unwrap();
+
+        assert_eq!(procedure_response.entry.is_empty(), false);
+        for entry in procedure_response.entry.iter() {
+            assert_ne!(entry.is_none(), true);
+            let ref procedure = match entry.clone().unwrap().resource.unwrap() {
+                Resource::Procedure(procedure) => procedure,
+                _ => continue,
+            };
+            // ensure identifier was changed to the project id
+            let identifier = procedure.subject.identifier.clone().unwrap();
+            assert_eq!(identifier.system, Some(format!("PROJECT_1_ID")));
+            assert_ne!(identifier.value.as_ref(), Some(&data_request.exchange_id));
+        };
+
+
+        let condition_response = reqwest::Client::new()
+            .get("http://localhost:8095/fhir/Condition")
+            .send()
+            .await.unwrap()
+            .json::<Bundle>()
+            .await.unwrap();
+
+        assert_eq!(condition_response.entry.is_empty(), false);
+        for entry in condition_response.entry.iter() {
+            assert_ne!(entry.is_none(), true);
+            let ref condition = match entry.clone().unwrap().resource.unwrap() {
+                Resource::Condition(condition) => condition,
+                _ => continue,
+            };
+            // ensure identifier was changed to the project id
+            let identifier = condition.subject.identifier.clone().unwrap();
+            assert_eq!(identifier.system, Some(format!("PROJECT_1_ID")));
+            assert_ne!(identifier.value.as_ref(), Some(&data_request.exchange_id));
+        };
+    }
 }

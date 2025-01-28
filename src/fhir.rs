@@ -1,5 +1,6 @@
 use anyhow::Context;
-use chrono::NaiveDate;
+use std::str::FromStr;
+use chrono::NaiveDateTime;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
     resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
@@ -84,10 +85,10 @@ impl FhirServer {
     }
 
     // get data from fhir server that updated after a specified date
-    pub async fn pull_new_data(&self, last_update: NaiveDate) -> anyhow::Result<Bundle> {
+    pub async fn pull_new_data(&self, last_update: NaiveDateTime) -> anyhow::Result<Bundle> {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Fetching new data from: {}", bundle_endpoint);
-        let query = vec![("_lastUpdated", format!("gt{}", last_update))];
+        let query = vec![("_lastUpdated", format!("gt{}", last_update.format("%Y-%m-%dT%H:%M:%S").to_string()))];
         let response = self.client
             .get(bundle_endpoint)
             .add_auth(&self.auth)
@@ -103,12 +104,12 @@ impl FhirServer {
 
     // post a fhir bundle to a specified fhir server
     pub async fn post_data(&self, bundle: &Bundle) -> anyhow::Result<reqwest::Response> {
-        let bundle_endpoint = dbg!(format!("{}fhir", self.url));
+        let bundle_endpoint = format!("{}fhir", self.url);
         debug!("Posting data to output fhir server: {}", bundle_endpoint);
         self.client
             .post(bundle_endpoint)
             .add_auth(&self.auth)
-            .json(dbg!(&bundle))
+            .json(&bundle)
             .send()
             .await
             .context("Unable to post data to output fhir server")
@@ -118,7 +119,7 @@ impl FhirServer {
 pub trait PatientExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
     fn add_id_request(self, id: String) -> axum::response::Result<Self>;
-    fn get_exchange_identifier(&self) -> Option<&Identifier>;
+    fn get_identifier(&self, id_system: &str) -> Option<&Identifier>;
 }
 
 impl PatientExt for Patient {
@@ -143,11 +144,11 @@ impl PatientExt for Patient {
         Ok(self)
     }
 
-    fn get_exchange_identifier(&self) -> Option<&Identifier> {
+    fn get_identifier(&self, id_system: &str) -> Option<&Identifier> {
         self.identifier
             .iter()
             .flatten()
-            .find(|x| x.system.as_ref() == Some(&CONFIG.exchange_id_system))
+            .find(|x| x.system.as_ref() == Some(&String::from_str(id_system).unwrap()))
     }
 
     fn pseudonymize(self) -> axum::response::Result<Self> {

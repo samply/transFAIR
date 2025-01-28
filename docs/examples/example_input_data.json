@@ -1,4 +1,5 @@
 {
+    "id": "<<data_request_id>>",
     "resourceType": "Bundle",
     "type": "transaction",
     "entry": [
@@ -42,7 +43,7 @@
                 "subject": {
                     "identifier": {
                         "system": "SESSION_ID",
-                        "value": "005TY0EC"
+                        "value": "<<session_id>>"
                     }
                 }
             },
@@ -88,7 +89,7 @@
                 "subject": {
                     "identifier": {
                         "system": "SESSION_ID",
-                        "value": "005TY0EC"
+                        "value": "<<session_id>>"
                     }
                 }
             },
