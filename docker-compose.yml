@@ -47,12 +47,6 @@ services:
     ports:
       - 8086:8080
 
-  # This is the place where the authority for data transfer gathers their data
-  routine-data-fhir-server:
-    image: samply/blaze
-    ports:
-      - 8090:8080
-
   # This service reprents a specific projects database
   project-data-fhir-server:
     image: samply/blaze

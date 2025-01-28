@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use axum::{extract::{Path, State}, Json};
 
 use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
@@ -24,7 +26,9 @@ pub enum RequestStatus {
 pub struct DataRequest {
     pub id: String,
     pub status: RequestStatus,
-    pub message: Option<String>
+    pub message: Option<String>,
+    pub exchange_id: String,
+    pub project_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -41,6 +45,8 @@ pub async fn create_data_request(
     let mut consent = payload.consent;
     let mut patient = payload.patient;
 
+    let mut project_identifier = None;
+
     if let Some(ttp) = &CONFIG.ttp {
         patient = patient
           .add_id_request(CONFIG.exchange_id_system.clone())?
@@ -51,13 +57,22 @@ pub async fn create_data_request(
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         consent = ttp.document_patient_consent(consent, &patient).await?;
         trace!("TTP returned this consent for Patient {:?}", consent);
+
+        // TODO: Safe way for unwrap
+        project_identifier = patient.get_identifier(&ttp.project_id_system).cloned().unwrap().value.clone();
     }
 
     // ensure that we have at least one identifier with which we can link
-    let Some(exchange_identifier) = patient.get_exchange_identifier().cloned() else {
+    let Some(exchange_identifier) = patient.get_identifier(&CONFIG.exchange_id_system).cloned() else {
         return Err(
             (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &CONFIG.exchange_id_system)).into()
         );
+    };
+
+    let Some(ref exchange_identifier) = exchange_identifier.value else {
+        return Err(
+            (StatusCode::BAD_REQUEST, format!("No valid value for identifier {}", &CONFIG.exchange_id_system)).into()
+        )
     };
 
     patient = patient.pseudonymize()?;
@@ -71,13 +86,15 @@ pub async fn create_data_request(
     let data_request = DataRequest {
         id: data_request_id,
         status: RequestStatus::Created,
-        message: None
+        message: Some(String::from_str("Data Request created!").unwrap()),
+        exchange_id: exchange_identifier.to_string(),
+        project_id: project_identifier
     };
 
     // storage for associated project id
     let sqlite_query_result = sqlx::query!(
-        "INSERT INTO data_requests (id, status, message, exchange_id) VALUES ($1, $2, $3, $4)",
-        data_request.id, data_request.status, "Data Request created!", exchange_identifier.value
+        "INSERT INTO data_requests (id, status, message, exchange_id, project_id) VALUES ($1, $2, $3, $4, $5)",
+        data_request.id, data_request.status, data_request.message, data_request.exchange_id, data_request.project_id
     ).execute(&database_pool).await.map_err(|e| {
         error!("Unable to persist data request to database. {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "Unable to persist data request to database.")
@@ -95,7 +112,7 @@ pub async fn list_data_requests(
 ) -> Result<Json<Vec<DataRequest>>, (StatusCode, &'static str)> {
     let data_requests = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id, status as "status: _", message FROM data_requests;"#,
+        r#"SELECT id, status as "status: _", message, exchange_id, project_id FROM data_requests;"#,
     ).fetch_all(&database_pool).await.map_err(|e| {
        error!("Unable to fetch data requests from database: {}", e); 
        (StatusCode::INTERNAL_SERVER_ERROR, "Unable to fetch data requests from database!")
@@ -111,7 +128,7 @@ pub async fn get_data_request(
     debug!("Information on data request {} requested.", request_id);
     let data_request = sqlx::query_as!(
         DataRequest,
-        r#"SELECT id, status as "status: _", message FROM data_requests WHERE id = $1;"#,
+        r#"SELECT id, status as "status: _", message, exchange_id, project_id FROM data_requests WHERE id = $1;"#,
         request_id
     ).fetch_optional(&database_pool).await.map_err(|e| {
         error!("Unable to fetch data request {} from database: {}", request_id, e);
@@ -125,7 +142,7 @@ pub async fn get_data_request(
 
 fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
     let mut linked_consent = consent.clone();
-    let exchange_identifier= patient.get_exchange_identifier();
+    let exchange_identifier= patient.get_identifier(&CONFIG.exchange_id_system);
     let Some(exchange_identifier) = exchange_identifier else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
     };
@@ -136,8 +153,8 @@ fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent,
 pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>, database_pool: &Pool<Sqlite>) -> sqlx::Result<()> {
     let Some(linkage_results) = linkage_results else {
         let message_success_without_linkage = format!("Transferred data from input to output FHIR server without linkage.");
-        sqlx::query!(
-            "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
+        let _ = sqlx::query!(
+            "UPDATE data_requests SET status = $1, message = $2 WHERE id=$3",
             RequestStatus::Success, message_success_without_linkage, bundle_identifier
         ).execute(database_pool).await?;
         return Ok(());
@@ -145,8 +162,7 @@ pub async fn update_data_request(bundle_identifier: &str, linkage_results: Optio
     let result_summary = linkage_results.iter().map(|res| match res {
         Ok(rt) => format!("{rt}()"),
         Err(error) => format!("{error}"),
-    }).collect::<Vec<String>>().join("\n");
-
+    }).collect::<Vec<String>>().join(",");
     debug!("{}", result_summary);
 
     let result_status = match linkage_results.iter().any(Result::is_err) {
@@ -154,8 +170,8 @@ pub async fn update_data_request(bundle_identifier: &str, linkage_results: Optio
         false => RequestStatus::Success,
     };
 
-    sqlx::query!(
-        "UPDATE data_requests SET status = $1, message = $2 WHERE exchange_id=$3",
+    let _ = sqlx::query!(
+        "UPDATE data_requests SET status = $1, message = $2 WHERE id=$3",
         result_status, result_summary, bundle_identifier
     ).execute(database_pool).await?;
     Ok(())
