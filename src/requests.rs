@@ -16,7 +16,7 @@ use crate::{
     data_access::{
         data_requests::{exists, get_all, get_by_id, insert},
         models::{DataRequest, DataRequestPayload},
-    }, extensions::{option_str_ext::OptionStrExt, str_ext::StrExt}, fhir::{FhirServer, PatientExt}, CONFIG
+    }, fhir::{FhirServer, PatientExt}, CONFIG
 };
 
 static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
@@ -36,7 +36,10 @@ pub async fn create_data_request(
     let mut project_id: Option<&str> = None;
 
     if let Some(ttp) = &CONFIG.ttp {
-        project_id = ttp.project_id_system.to_option_str();
+        project_id = match ttp.project_id_system.trim() {
+            "" => None,
+            x => Some(x),
+        };
 
         if let Some(proj_id) = project_id {
             patient = patient
@@ -91,7 +94,7 @@ pub async fn create_data_request(
         .post_data_request(DataRequestPayload { patient, consent })
         .await?;
 
-    let data_request = DataRequest::new(data_request_id, patient_id, project_id.to_option_string());
+    let data_request = DataRequest::new(data_request_id, patient_id, project_id.map(str::to_string));
     // storage for associated project id
     let last_insert_rowid = insert(&database_pool, &data_request)
     .await
