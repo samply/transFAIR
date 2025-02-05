@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, exchange_id, project_id, status as \"status: _\" FROM data_requests;",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "exchange_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "project_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status: _",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e643e3de461a0122755ad08cab4250e3067d0fd008a4c9af2ac80d7e839123cf"
+}

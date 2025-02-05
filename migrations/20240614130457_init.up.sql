@@ -10,6 +10,8 @@ VALUES  ('Created', 1),
         ('Error', 4);
 
 CREATE TABLE IF NOT EXISTS data_requests (
-    id      CHAR(36)    PRIMARY KEY NOT NULL,
-    status  CHAR(16)    NOT NULL DEFAULT ('Created') REFERENCES request_status(Type) 
+    id          CHAR(36)    PRIMARY KEY NOT NULL,
+    exchange_id CHAR(36)    NOT NULL,
+    project_id  CHAR(36)    NULL,
+    status      CHAR(16)    NOT NULL DEFAULT ('Created') REFERENCES request_status(Type)
 )
