@@ -22,12 +22,13 @@ function start_bg() {
     TRIES=1
     while [ $TRIES -ne 0 ]; do
       set +e
+      rm /tmp/body
       CODE=$(curl -s -o /tmp/body -w '%{response_code}' http://localhost:$blaze_port/fhir/metadata)
       set -e
       if [ "$CODE" == "200" ]; then
         TRIES=0
       else
-        echo "Waiting for blaze on port $blaze_port ... (try ${TRIES}/300, last response was: code=$OUT, body=\"$(cat /tmp/body 2>/dev/null | head)\")"
+        echo "Waiting for blaze on port $blaze_port ... (try ${TRIES}/300, last response was: code=$CODE, body=\"$(cat /tmp/body 2>/dev/null | head)\")"
         sleep 1
         ((TRIES = TRIES + 1))
         if [ $TRIES -ge 300 ]; then
