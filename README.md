@@ -148,13 +148,18 @@ Provides an overview of all requests processed by this instance.
     ]
 ```
 
-## Setup a Development Environment
+## Developers
+### Setup a Development Environment
 
 To setup a development environment you need to install [Rust](https://www.rust-lang.org/tools/install) and [Docker](https://docs.docker.com/engine/install/).
 After setting up both, you can run the necessary external components with `docker compose up` (using [docker-compose.yml](./docker-compose.yml)) and 
 then run and build the application with `cargo run` (which will use environment defined in [.cargo/config.toml](./.cargo/config.toml)).
 
 You can run the integration tests against your running application using `cargo test`.
+
+### Changing the Database
+
+If you make changes to the database schema or add new sql queries to the program, you need to additionally run `cargo sqlx prepare` to let sqlx update the query caches for the ci. This is necessary, as sqlx does compile time verification of for queries to match the database scheme and in the ci now database is initialized. The command will create caches for those validations that the ci can use.
 
 ## Roadmap
 
