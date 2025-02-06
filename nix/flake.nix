@@ -1,5 +1,5 @@
 {
-  description = "transFAIR";
+  description = "transfair";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
@@ -14,7 +14,7 @@
   outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        name = "transFAIR";
+        name = "transfair";
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
         rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile
