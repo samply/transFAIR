@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO data_requests (id, status, message, exchange_id, project_id) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "536758f9f7b207c7e04744eea00501feea80e0bd4728040bcf54d0445afca0f7"
+}

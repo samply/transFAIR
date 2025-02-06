@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT execution_time FROM last_request",
+  "describe": {
+    "columns": [
+      {
+        "name": "execution_time",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c98b1a5784b4247776305ac156e586adf9cb30bff42e88d03e497ce249761a4c"
+}
