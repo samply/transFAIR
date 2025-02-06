@@ -18,7 +18,7 @@ function start_bg() {
   export DATABASE_URL="sqlite://data_requests.sql?mode=rwc"
   export RUST_LOG="info,routine_connector=debug"
   docker compose up -d --no-build --no-recreate
-  for blaze_port in 8085 8086 8090 8095; do
+  for blaze_port in 8085 8086 8095; do
     TRIES=1
     while [ $TRIES -ne 0 ]; do
       set +e
