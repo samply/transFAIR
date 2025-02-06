@@ -39,8 +39,8 @@ function start_bg() {
       fi
     done
   done
-  chmod +x artifacts/binaries-amd64/transFAIR
-  artifacts/binaries-amd64/transFAIR &
+  chmod +x artifacts/binaries-amd64/transfair
+  artifacts/binaries-amd64/transfair &
   sleep 10
 }
 
