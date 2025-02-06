@@ -320,7 +320,7 @@ mod tests {
             .json::<Bundle>()
             .await.unwrap();
 
-        assert_eq!(procedure_response.entry.is_empty(), false);
+        assert!(!procedure_response.entry.is_empty());
         for entry in procedure_response.entry.iter() {
             assert_ne!(entry.is_none(), true);
             let ref procedure = match entry.clone().unwrap().resource.unwrap() {
@@ -341,7 +341,7 @@ mod tests {
             .json::<Bundle>()
             .await.unwrap();
 
-        assert_eq!(condition_response.entry.is_empty(), false);
+        assert!(!condition_response.entry.is_empty());
         for entry in condition_response.entry.iter() {
             assert_ne!(entry.is_none(), true);
             let ref condition = match entry.clone().unwrap().resource.unwrap() {
