@@ -1,5 +1,4 @@
 use anyhow::Context;
-use std::str::FromStr;
 use chrono::NaiveDateTime;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
@@ -148,7 +147,7 @@ impl PatientExt for Patient {
         self.identifier
             .iter()
             .flatten()
-            .find(|x| x.system.as_ref() == Some(&String::from_str(id_system).unwrap()))
+            .find(|x| x.system.as_deref() == Some(id_system))
     }
 
     fn pseudonymize(self) -> axum::response::Result<Self> {
