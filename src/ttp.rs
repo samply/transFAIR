@@ -1,58 +1,101 @@
 mod mainzelliste;
 mod greifswald;
 
+use std::ops::Deref;
+
 use axum::response::IntoResponse;
-use clap::{Args, ValueEnum};
+use clap::{FromArgMatches, Parser, ValueEnum};
 use fhir_sdk::r4b::resources::{Consent, Patient};
 use reqwest::{Client, StatusCode, Url};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Args, Clone, Debug)]
-#[group(requires = "url", requires = "api_key", requires = "project_id_system")]
-pub struct Ttp {
-    #[arg(
-        required = false,
+#[derive(Parser, Debug, Clone)]
+pub struct TtpInner {
+    #[clap(
         long = "institute-ttp-url",
         env = "INSTITUTE_TTP_URL"
     )]
     pub url: Url,
-    #[arg(
-        required = false,
-        long = "institute-ttp-api-key",
-        env = "INSTITUTE_TTP_API_KEY"
-    )]
-    pub api_key: String,
 
     // defines the identifier to safe in the project database
-    #[arg(required = false, long, env)]
+    #[clap(long, env)]
     pub project_id_system: String,
 
-    #[arg(required = false, long, env, default_value = "mainzelliste")]
-    pub ttp_type: TtpType,
-
-    #[arg(skip)]
+    #[clap(skip)]
     client: Client,
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum TtpType {
+#[derive(Debug, Clone)]
+pub enum Ttp {
+    Mainzelliste(mainzelliste::MlConfig),
+    Greifswald(greifswald::GreifswaldConfig)
+}
+
+#[derive(ValueEnum, Clone, Copy)]
+enum TtpType {
     Mainzelliste,
-    Greifswald
+    Greifswald,
+}
+
+#[derive(clap::Args)]
+struct TtpTypeParser {
+    #[clap(long, env, default_value = "mainzelliste")]
+    ttp_type: TtpType,
+}
+
+impl FromArgMatches for Ttp {
+    fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
+        let ttp = match TtpTypeParser::from_arg_matches(matches)?.ttp_type {
+            TtpType::Mainzelliste => Ttp::Mainzelliste(mainzelliste::MlConfig::from_arg_matches(matches)?),
+            TtpType::Greifswald => Ttp::Greifswald(greifswald::GreifswaldConfig::from_arg_matches(matches)?),
+        };
+        Ok(ttp)
+    }
+
+    fn update_from_arg_matches(&mut self, _matches: &clap::ArgMatches) -> Result<(), clap::Error> {
+        Ok(())
+    }
+}
+
+impl clap::Args for Ttp {
+    fn augment_args(cmd: clap::Command) -> clap::Command {
+        let cmd = TtpTypeParser::augment_args(cmd);
+        cmd.defer(|cmd| {
+            match TtpTypeParser::from_arg_matches(&cmd.clone().get_matches()).unwrap().ttp_type {
+                TtpType::Mainzelliste => mainzelliste::MlConfig::augment_args(cmd),
+                TtpType::Greifswald => greifswald::GreifswaldConfig::augment_args(cmd),
+            }
+        })
+    }
+
+    fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
+        cmd
+    }
+}
+
+impl Deref for Ttp {
+    type Target = TtpInner;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Ttp::Mainzelliste(config) => config,
+            Ttp::Greifswald(config) => config,
+        }
+    }
 }
 
 impl Ttp {
     pub async fn check_availability(&self) -> bool {
-        match self.ttp_type {
-            TtpType::Mainzelliste => mainzelliste::check_availability(self).await,
-            TtpType::Greifswald => greifswald::check_availability(self).await,
+        match self {
+            Ttp::Mainzelliste(config) => config.check_availability().await,
+            Ttp::Greifswald(config) => config.check_availability().await,
         }
     }
 
     pub async fn check_idtype_available(&self, idtype: &str) -> bool {
-        match self.ttp_type {
-            TtpType::Mainzelliste => mainzelliste::check_idtype_available(self, idtype).await,
-            TtpType::Greifswald => greifswald::check_idtype_available(self, idtype).await,
+        match self {
+            Ttp::Mainzelliste(config) => config.check_idtype_available(idtype).await,
+            Ttp::Greifswald(config) => config.check_idtype_available(idtype).await,
         }
     }
 
@@ -61,11 +104,9 @@ impl Ttp {
         consent: Consent,
         patient: &Patient,
     ) -> Result<Consent, (StatusCode, &'static str)> {
-        match self.ttp_type {
-            TtpType::Mainzelliste => {
-                mainzelliste::document_patient_consent(consent, patient, self).await
-            }
-            TtpType::Greifswald => Err((StatusCode::NOT_IMPLEMENTED, "Documenting patient consent with Greifswald tools is not yet implemented")),
+        match self {
+            Ttp::Mainzelliste(config) => config.document_patient_consent(consent, patient).await,
+            Ttp::Greifswald(..) => Err((StatusCode::NOT_IMPLEMENTED, "Documenting patient consent with Greifswald tools is not yet implemented")),
         }
     }
 
@@ -73,10 +114,10 @@ impl Ttp {
         &self,
         patient: &Patient,
     ) -> axum::response::Result<Patient> {
-        Ok(match self.ttp_type {
-            TtpType::Mainzelliste => mainzelliste::request_project_pseudonym(patient, self).await?,
-            TtpType::Greifswald => greifswald::request_project_pseudonym(self, patient).await?,
-        })
+        match self {
+            Ttp::Mainzelliste(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),
+            Ttp::Greifswald(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),
+        }
     }
 }
 
