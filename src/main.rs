@@ -2,7 +2,6 @@ use std::{process::ExitCode, time::Duration};
 
 use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
-use clap::Parser;
 use config::Config;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};

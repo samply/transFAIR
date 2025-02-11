@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use clap::Parser;
 use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
 use fhir_sdk::r4b::resources::{
     Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
@@ -10,173 +11,198 @@ use tracing::debug;
 use crate::fhir::ParameterExt;
 use crate::ttp_bail;
 
-use super::{Ttp, TtpError};
+use super::TtpError;
 
-pub async fn check_availability(ttp: &Ttp) -> bool {
-    ttp.client.get(ttp.url.clone()).send().await.is_ok()
+#[derive(Debug, Parser, Clone)]
+pub struct GreifswaldConfig {
+    #[clap(flatten)]
+    base: super::TtpInner,
+
+    #[clap(long, env, default_value = "transfair")]
+    source: String,
 }
 
-// https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html ???????????
-pub async fn check_idtype_available(_ttp: &Ttp, _idtype: &str) -> bool {
-    // TODO: implement
-    true
-}
+impl std::ops::Deref for GreifswaldConfig {
+    type Target = super::TtpInner;
 
-// https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Einwilligungsmanagement-Operations-addConsent.html
-pub async fn document_patient_consent(
-    ttp: &Ttp,
-    _consent: Consent,
-    patient: &Patient,
-) -> Result<Consent, TtpError> {
-    let url = ttp.url.join("/ttp-fhir/fhir/gics/$addConsent").unwrap();
-    let params = Parameters::builder()
-        .parameter(vec![
-            ParametersParameter::builder()
-                .name("patient".into())
-                .resource(patient.clone().into())
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("questionnaireResponse".into())
-                .resource(
-                    QuestionnaireResponse::builder()
-                        .status(fhir_sdk::r4b::codes::QuestionnaireResponseStatus::Completed)
-                        .build()
-                        .unwrap()
-                        .into(),
-                )
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("domain".into())
-                .value(ParametersParameterValue::String(
-                    ttp.project_id_system.clone(),
-                ))
-                .build()
-                .ok(),
-            // ParametersParameter::builder()
-            //     .name("documentReference".into())
-            //     .resource(
-            //         DocumentReference::builder()
-            //             // .content(vec![Some(DocumentReferenceContent::builder().attachment(a).build().unwrap())])
-            //             // .content(vec![None])
-            //             .contained(vec![consent.into()])
-            //             .status(fhir_sdk::r4b::codes::DocumentReferenceStatus::Current)
-            //             .build()
-            //             .unwrap()
-            //             .into(),
-            //     )
-            //     .build()
-            //     .ok(),
-        ])
-        .build()
-        .unwrap();
-    let bundle = ttp
-        .client
-        .post(url)
-        .json(&params)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<Bundle>()
-        .await?;
-    let Resource::Consent(c) = bundle
-        .0
-        .entry
-        .iter()
-        .flatten()
-        .next()
-        .unwrap()
-        .resource
-        .as_ref()
-        .cloned()
-        .unwrap()
-    else {
-        ttp_bail!("Bundle did not contain a consent resoucrce: {bundle:#?}")
-    };
-    Ok(c)
-}
-
-// https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
-pub async fn request_project_pseudonym(ttp: &Ttp, patient: &Patient) -> Result<Patient, TtpError> {
-    let url = ttp.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
-    let params = Parameters::builder()
-        .parameter(vec![
-            ParametersParameter::builder()
-                .name("source".into())
-                .value(ParametersParameterValue::String(String::from(
-                    "dummy_safe_source",
-                )))
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("domain".into())
-                .value(ParametersParameterValue::String(
-                    ttp.project_id_system.clone(),
-                ))
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("forceReferenceUpdate".into())
-                .value(ParametersParameterValue::Boolean(true))
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("saveAction".into())
-                .value(
-                    Coding::builder()
-                        .system("https://ths-greifswald.de/fhir/CodeSystem/epix/SaveAction".into())
-                        .code("DONT_SAVE_ON_PERFECT_MATCH".into())
-                        .build()
-                        .map(ParametersParameterValue::Coding)
-                        .unwrap(),
-                )
-                .build()
-                .ok(),
-            ParametersParameter::builder()
-                .name("identity".into())
-                .resource(patient.clone().into())
-                .build()
-                .ok(),
-        ])
-        .build()
-        .unwrap();
-    let parameters = ttp
-        .client
-        .post(url)
-        .json(&params)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<Parameters>()
-        .await?;
-    debug!(?parameters);
-    let Some(result) = parameters.parameter.get_param_by_name("matchResult") else {
-        ttp_bail!("Response parameters did not contain a match result")
-    };
-    let status = result.part.get_param_by_name("matchStatus");
-    let Some(ParametersParameterValue::Coding(c)) = status.and_then(|c| c.value.as_ref()) else {
-        ttp_bail!("Response did not contain a matchStatus")
-    };
-    let Some(status) = c.code.as_ref().and_then(|v| v.parse::<MatchStatus>().ok()) else {
-        ttp_bail!("Failed to parse coding as MatchStatus. Was {c:?}")
-    };
-    if status == MatchStatus::MatchError {
-        ttp_bail!("Got a matching error: {result:#?}")
+    fn deref(&self) -> &Self::Target {
+        &self.base
     }
-    let Some(ParametersParameter {
-        resource: Some(Resource::Person(person)),
-        ..
-    }) = result.part.get_param_by_name("mpiPerson").as_ref()
-    else {
-        ttp_bail!("Matching result did not contain a patient: {result:#?}")
-    };
-    if person.identifier.iter().flatten().count() == 0 {
-        ttp_bail!("Patient returned by matching did not contain any identifiers")
+}
+
+impl GreifswaldConfig {
+    pub async fn check_availability(&self) -> bool {
+        self.client.get(self.url.clone()).send().await.is_ok()
     }
-    // Do we need to copy over more fields?
-    let patient = Patient::builder().identifier(person.identifier.clone()).build().unwrap();
-    Ok(patient)
+
+    // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html ???????????
+    pub async fn check_idtype_available(&self, _idtype: &str) -> bool {
+        // TODO: implement
+        true
+    }
+
+    // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Einwilligungsmanagement-Operations-addConsent.html
+    pub(super) async fn document_patient_consent(
+        &self,
+        _consent: Consent,
+        patient: &Patient,
+    ) -> Result<Consent, TtpError> {
+        let url = self.url.join("/ttp-fhir/fhir/gics/$addConsent").unwrap();
+        let params = Parameters::builder()
+            .parameter(vec![
+                ParametersParameter::builder()
+                    .name("patient".into())
+                    .resource(patient.clone().into())
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("questionnaireResponse".into())
+                    .resource(
+                        QuestionnaireResponse::builder()
+                            .status(fhir_sdk::r4b::codes::QuestionnaireResponseStatus::Completed)
+                            .build()
+                            .unwrap()
+                            .into(),
+                    )
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("domain".into())
+                    .value(ParametersParameterValue::String(
+                        self.project_id_system.clone(),
+                    ))
+                    .build()
+                    .ok(),
+                // ParametersParameter::builder()
+                //     .name("documentReference".into())
+                //     .resource(
+                //         DocumentReference::builder()
+                //             // .content(vec![Some(DocumentReferenceContent::builder().attachment(a).build().unwrap())])
+                //             // .content(vec![None])
+                //             .contained(vec![consent.into()])
+                //             .status(fhir_sdk::r4b::codes::DocumentReferenceStatus::Current)
+                //             .build()
+                //             .unwrap()
+                //             .into(),
+                //     )
+                //     .build()
+                //     .ok(),
+            ])
+            .build()
+            .unwrap();
+        let bundle = self
+            .client
+            .post(url)
+            .json(&params)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Bundle>()
+            .await?;
+        let Resource::Consent(c) = bundle
+            .0
+            .entry
+            .iter()
+            .flatten()
+            .next()
+            .unwrap()
+            .resource
+            .as_ref()
+            .cloned()
+            .unwrap()
+        else {
+            ttp_bail!("Bundle did not contain a consent resoucrce: {bundle:#?}")
+        };
+        Ok(c)
+    }
+
+    // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
+    pub(super) async fn request_project_pseudonym(&self, patient: &Patient) -> Result<Patient, TtpError> {
+        let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
+        let params = Parameters::builder()
+            .parameter(vec![
+                ParametersParameter::builder()
+                    .name("source".into())
+                    .value(ParametersParameterValue::String(String::from(
+                        self.source.clone(),
+                    )))
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("domain".into())
+                    .value(ParametersParameterValue::String(
+                        self.project_id_system.clone(),
+                    ))
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("forceReferenceUpdate".into())
+                    .value(ParametersParameterValue::Boolean(true))
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("saveAction".into())
+                    .value(
+                        Coding::builder()
+                            .system(
+                                "https://ths-greifswald.de/fhir/CodeSystem/epix/SaveAction".into(),
+                            )
+                            .code("DONT_SAVE_ON_PERFECT_MATCH".into())
+                            .build()
+                            .map(ParametersParameterValue::Coding)
+                            .unwrap(),
+                    )
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("identity".into())
+                    .resource(patient.clone().into())
+                    .build()
+                    .ok(),
+            ])
+            .build()
+            .unwrap();
+        let parameters = self
+            .client
+            .post(url)
+            .json(&params)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Parameters>()
+            .await?;
+        debug!(?parameters);
+        let Some(result) = parameters.parameter.get_param_by_name("matchResult") else {
+            ttp_bail!("Response parameters did not contain a match result")
+        };
+        let status = result.part.get_param_by_name("matchStatus");
+        let Some(ParametersParameterValue::Coding(c)) = status.and_then(|c| c.value.as_ref())
+        else {
+            ttp_bail!("Response did not contain a matchStatus")
+        };
+        let Some(status) = c.code.as_ref().and_then(|v| v.parse::<MatchStatus>().ok()) else {
+            ttp_bail!("Failed to parse coding as MatchStatus. Was {c:?}")
+        };
+        if status == MatchStatus::MatchError {
+            ttp_bail!("Got a matching error: {result:#?}")
+        }
+        let Some(ParametersParameter {
+            resource: Some(Resource::Person(person)),
+            ..
+        }) = result.part.get_param_by_name("mpiPerson").as_ref()
+        else {
+            ttp_bail!("Matching result did not contain a patient: {result:#?}")
+        };
+        if person.identifier.iter().flatten().count() == 0 {
+            ttp_bail!("Patient returned by matching did not contain any identifiers")
+        }
+        // Do we need to copy over more fields?
+        let patient = Patient::builder()
+            .identifier(person.identifier.clone())
+            .build()
+            .unwrap();
+        Ok(patient)
+    }
 }
 
 /// Taken from: https://simplifier.net/packages/ths-greifswald.ttp-fhir-gw/2024.1.1/files/2432769
@@ -212,7 +238,7 @@ impl FromStr for MatchStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::ttp::TtpType;
+    use crate::ttp::TtpInner;
 
     use super::*;
     use fhir_sdk::{
@@ -227,15 +253,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "Unclear how we proceed here as it does not seem to accept a Consent resource"]
     async fn test_document_patient_consent() {
-        let ttp = Ttp {
-            url: "https://demo.ths-greifswald.de".parse().unwrap(),
-            api_key: String::new(),
-            project_id_system: "MII".into(),
-            ttp_type: TtpType::Greifswald,
-            client: Client::new(),
+        let ttp = GreifswaldConfig {
+            base: TtpInner {
+                url: "https://demo.ths-greifswald.de".parse().unwrap(),
+                project_id_system: "MII".into(),
+                client: Client::new(),
+            },
+            source: "dummy_safe_source".into(),
         };
-        document_patient_consent(
-            &ttp,
+        ttp.document_patient_consent(
             Consent::builder()
                 .status(ConsentState::Active)
                 .scope(CodeableConcept::builder().build().unwrap())
@@ -250,14 +276,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_project_pseudonym() {
-        let ttp = Ttp {
-            url: "https://demo.ths-greifswald.de".parse().unwrap(),
-            api_key: String::new(),
-            project_id_system: "Demo".into(),
-            ttp_type: TtpType::Greifswald,
-            client: Client::new(),
+        let ttp = GreifswaldConfig {
+            base: TtpInner {
+                url: "https://demo.ths-greifswald.de".parse().unwrap(),
+                project_id_system: "Demo".into(),
+                client: Client::new(),
+            },
+            source: "dummy_safe_source".into(),
         };
-        request_project_pseudonym(&ttp, &fake_patient())
+        ttp.request_project_pseudonym(&fake_patient())
             .await
             .unwrap();
     }
