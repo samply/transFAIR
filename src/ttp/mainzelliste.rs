@@ -7,7 +7,7 @@ use tracing::{debug, trace, warn};
 use super::Ttp;
 
 pub(super) async fn check_availability(ttp: &Ttp) -> bool {
-    let response = match reqwest::Client::new()
+    let response = match ttp.client
         .get(ttp.url.clone())
         .header( "Accept", "application/json")
         .send()
@@ -43,7 +43,7 @@ pub(super) async fn check_idtype_available(ttp: &Ttp, idtype: &str) -> bool {
 pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'static str)> {
     let idtypes_endpoint = ttp.url.join("configuration/idTypes").unwrap();
 
-    let supported_ids = reqwest::Client::new()
+    let supported_ids = ttp.client
         .get(idtypes_endpoint)
         .header("mainzellisteApiKey", &ttp.api_key)
         .send()
@@ -71,13 +71,13 @@ pub async fn get_supported_ids(ttp: &Ttp) -> Result<Vec<String>, (StatusCode, &'
 }
 
 pub(super) async fn request_project_pseudonym(
-    patient: &mut Patient,
+    patient: &Patient,
     ttp: &Ttp
 ) -> Result<Patient, (StatusCode, &'static str)> {
     // TODO: Need to ensure request for project pseudonym is included
     let patients_endpoint = ttp.url.join("fhir/Patient").unwrap();
 
-    let response = reqwest::Client::new()
+    let response = ttp.client
         .post(patients_endpoint)
         .header("mainzellisteApiKey", &ttp.api_key.clone())
         .json(&patient)
@@ -117,7 +117,7 @@ async fn create_mainzelliste_session(ttp: &Ttp) -> Result<Session, (StatusCode, 
     let sessions_endpoint = ttp.url.join("sessions").unwrap();
     debug!("Requesting Session from Mainzelliste: {}", sessions_endpoint);
 
-    reqwest::Client::new()
+    ttp.client
         .post(sessions_endpoint)
         .header("mainzellisteApiKey", &ttp.api_key)
         .send()

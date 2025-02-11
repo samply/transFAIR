@@ -2,7 +2,7 @@ use anyhow::Context;
 use chrono::NaiveDateTime;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
-    resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
+    resources::{Bundle, BundleEntry, BundleEntryRequest, ParametersParameter, Patient, Resource},
     types::Identifier,
 };
 use reqwest::{header, Client, StatusCode, Url};
@@ -95,6 +95,7 @@ impl FhirServer {
             .send()
             .await
             .context("Unable to query data from input server")?;
+        // TODO: Account for more samples using the bundels next link
         response
             .json::<Bundle>()
             .await
@@ -206,6 +207,16 @@ impl Into<Bundle> for DataRequestPayload {
             .entry(vec![Some(patient_entry), Some(consent_entry)])
             .build()
             .unwrap()
+    }
+}
+
+pub trait ParameterExt {
+    fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter>;
+}
+
+impl ParameterExt for Vec<Option<ParametersParameter>> {
+    fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter> {
+        self.iter().flatten().find(|p| p.name == name)
     }
 }
 
