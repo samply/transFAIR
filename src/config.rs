@@ -1,7 +1,9 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr, sync::LazyLock, time::{Duration, Instant}};
 
 use clap::Parser;
-use reqwest::Url;
+use reqwest::{Client, Url};
+use anyhow::anyhow;
+use tokio::sync::RwLock;
 
 use crate::ttp::Ttp;
 
@@ -41,16 +43,76 @@ pub enum Auth {
         user: String,
         pw: String,
     },
+    Oauth {
+        client_id: String,
+        client_secret: String,
+        token_url: Url,
+    }
 }
 
 impl FromStr for Auth {
-    type Err = &'static str;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
             return Ok(Self::None);
         }
-        let (user, pw) = s.split_once(":").ok_or("Credentials should be in the form of '<user>:<pw>'")?;
+        if s.starts_with("OAuth") {
+            let mut parts = s.split(' ').skip(1);
+            return Ok(Self::Oauth {
+                client_id: parts.next().ok_or(anyhow!("Missing client id"))?.into(),
+                client_secret: parts.next().ok_or(anyhow!("Missing client secret"))?.into(),
+                token_url: parts.next().ok_or(anyhow!("Missing OAuth token endpoint url"))?.parse()?,
+            })
+        }
+        let (user, pw) = s.split_once(":").ok_or(anyhow!("Credentials should be in the form of '<user>:<pw>'"))?;
         Ok(Self::Basic { user: user.to_owned(), pw: pw.to_owned() })
+    }
+}
+
+pub trait ClientBuilderExt {
+    async fn add_auth(self, auth: &Auth) -> reqwest::Result<reqwest::RequestBuilder>;
+}
+
+static OIDC_TOKENS: LazyLock<RwLock<HashMap<String, (Instant, String)>>> = LazyLock::new(Default::default);
+static OIDC_CLIENT: LazyLock<Client> = LazyLock::new(Client::new);
+
+impl ClientBuilderExt for reqwest::RequestBuilder {
+    async fn add_auth(self, auth: &Auth) -> reqwest::Result<Self> {
+        let res = match auth {
+            Auth::Basic { user, pw } => self.basic_auth(user, Some(pw)),
+            Auth::Oauth { client_id, client_secret, token_url } => {
+                {
+                    let read_lock = OIDC_TOKENS.read().await;
+                    if let Some((ttl, token)) = read_lock.get(client_id) {
+                        if *ttl <= Instant::now() {
+                            return Ok(self.bearer_auth(token));
+                        }
+                    }
+                }
+                #[derive(serde::Deserialize)]
+                struct TokenRes {
+                    expires_in: u64,
+                    access_token: String,
+                }
+                let TokenRes { expires_in, access_token } = OIDC_CLIENT
+                    .post(token_url.clone())
+                    .form(&serde_json::json!({
+                        "grant_type": "client_credentials",
+                        "client_id": client_id,
+                        "client_secret": client_secret
+                    }))
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json::<TokenRes>()
+                    .await?;
+                let res = self.bearer_auth(&access_token);
+                OIDC_TOKENS.write().await.insert(client_id.clone(), (Instant::now() + Duration::from_secs(expires_in), access_token));
+                res
+            }
+            Auth::None => self,
+        };
+        Ok(res)
     }
 }
