@@ -8,26 +8,13 @@ use fhir_sdk::r4b::{
 use reqwest::{header, Client, StatusCode, Url};
 use tracing::{debug, error, warn};
 
-use crate::{config::Auth, requests::DataRequestPayload, CONFIG};
+use crate::{config::{Auth, ClientBuilderExt}, requests::DataRequestPayload, CONFIG};
 
 #[derive(Clone, Debug)]
 pub struct FhirServer {
     url: Url,
     auth: Auth,
     client: Client,
-}
-
-trait ClientBuilderExt {
-    fn add_auth(self, auth: &Auth) -> Self;
-}
-
-impl ClientBuilderExt for reqwest::RequestBuilder {
-    fn add_auth(self, auth: &Auth) -> Self {
-        match auth {
-            Auth::Basic { user, pw } => self.basic_auth(user, Some(pw)),
-            Auth::None => self,
-        }
-    }
 }
 
 impl FhirServer {
@@ -47,6 +34,8 @@ impl FhirServer {
         let response = self.client
             .post(bundle_endpoint)
             .add_auth(&self.auth)
+            .await
+            .unwrap()
             .header(header::CONTENT_TYPE, "application/json+fhir")
             .json(&bundle)
             .send()
@@ -91,6 +80,7 @@ impl FhirServer {
         let response = self.client
             .get(bundle_endpoint)
             .add_auth(&self.auth)
+            .await?
             .query(&query)
             .send()
             .await
@@ -109,6 +99,7 @@ impl FhirServer {
         self.client
             .post(bundle_endpoint)
             .add_auth(&self.auth)
+            .await?
             .json(&bundle)
             .send()
             .await
