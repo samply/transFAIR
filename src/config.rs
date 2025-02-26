@@ -1,17 +1,17 @@
 use std::{collections::HashMap, str::FromStr, sync::LazyLock, time::{Duration, Instant}};
 
-use clap::Parser;
+use clap::{Args, CommandFactory, FromArgMatches, Parser};
 use reqwest::{Client, Url};
 use anyhow::anyhow;
 use tokio::sync::RwLock;
 
-use crate::ttp::Ttp;
+use crate::ttp::{self, Ttp};
 
 #[derive(Parser, Clone, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Config {
     // Definition of necessary parameters for communicating with a ttp
-    #[clap(flatten)]
+    #[clap(skip)]
     pub ttp: Option<Ttp>,
     // Either an id well-known to both, project and dic, or a temporary identifier created by the ttp
     #[clap(long, env, default_value = "TOKEN")]
@@ -34,6 +34,18 @@ pub struct Config {
     pub fhir_output_url: Url,
     #[clap(long, env, default_value = "")]
     pub fhir_output_credentials: Auth,
+}
+
+impl Config {
+    pub fn parse() -> Self {
+        let cmd = Config::command();
+        let cmd = ttp::Ttp::augment_args(cmd);
+        let args_matches = cmd.get_matches();
+        let mut this = Self::from_arg_matches(&args_matches).map_err(|e| e.exit()).unwrap();
+        let ttp = Ttp::from_arg_matches(&args_matches).ok();
+        this.ttp = ttp;
+        this
+    }
 }
 
 #[derive(Debug, Clone)]

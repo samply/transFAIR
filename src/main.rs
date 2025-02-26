@@ -2,7 +2,6 @@ use std::{process::ExitCode, time::Duration};
 
 use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
-use clap::Parser;
 use config::Config;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
@@ -129,7 +128,7 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
             };
 
             let entry_bundle = match resource {
-                Resource::Bundle(ref mut bundle) => bundle,
+                Resource::Bundle(bundle) => bundle,
                 _ => continue,
             };
 
@@ -210,8 +209,8 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
                 Some(patient) => patient,
                 None => return Err(LinkageError::NoReference(rt))
             },
-            Resource::Condition(ref mut condition) => &mut condition.subject,
-            Resource::Procedure(ref mut procedure) => &mut procedure.subject,
+            Resource::Condition(condition) => &mut condition.subject,
+            Resource::Procedure(procedure) => &mut procedure.subject,
             _ => return Err(LinkageError::UnknownResource(rt))
         };
 
