@@ -8,6 +8,7 @@ use fhir_sdk::r4b::resources::{
 use fhir_sdk::r4b::types::Coding;
 use tracing::debug;
 
+use crate::config::ClientBuilderExt;
 use crate::fhir::ParameterExt;
 use crate::ttp_bail;
 
@@ -94,6 +95,8 @@ impl GreifswaldConfig {
             .client
             .post(url)
             .json(&params)
+            .add_auth(&self.ttp_auth)
+            .await?
             .send()
             .await?
             .error_for_status()?
@@ -166,6 +169,8 @@ impl GreifswaldConfig {
             .client
             .post(url)
             .json(&params)
+            .add_auth(&self.ttp_auth)
+            .await?
             .send()
             .await?
             .error_for_status()?
@@ -238,7 +243,7 @@ impl FromStr for MatchStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::ttp::TtpInner;
+    use crate::{config::Auth, ttp::TtpInner};
 
     use super::*;
     use fhir_sdk::{
@@ -258,6 +263,7 @@ mod tests {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "MII".into(),
                 client: Client::new(),
+                ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
         };
@@ -281,6 +287,7 @@ mod tests {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "Demo".into(),
                 client: Client::new(),
+                ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
         };

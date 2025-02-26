@@ -9,6 +9,8 @@ use fhir_sdk::r4b::resources::{Consent, Patient};
 use reqwest::{Client, StatusCode, Url};
 use thiserror::Error;
 
+use crate::config::Auth;
+
 #[derive(Parser, Debug, Clone)]
 pub struct TtpInner {
     #[clap(
@@ -20,6 +22,9 @@ pub struct TtpInner {
     // defines the identifier to safe in the project database
     #[clap(long, env)]
     pub project_id_system: String,
+
+    #[clap(long, env, default_value = "")]
+    pub ttp_auth: Auth,
 
     #[clap(skip)]
     client: Client,
