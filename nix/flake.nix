@@ -49,6 +49,7 @@
           ML_ROUTINE_CONNECTOR_PASSPHRASE = "routine-connector-password";
           ML_DIZ_PASSPHRASE = "diz-password";
           ML_LOG_LEVEL = "debug";
+          # TLS_CA_CERTIFICATES_DIR = "./test-certs";
           # Start Compose Environment when opening Project
           shellHook = ''
             docker compose up -d

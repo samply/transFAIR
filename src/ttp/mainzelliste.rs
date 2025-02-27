@@ -8,7 +8,7 @@ use tracing::{debug, trace, warn};
 #[derive(Debug, Parser, Clone)]
 pub struct MlConfig {
     #[clap(flatten)]
-    base: super::TtpInner,
+    pub base: super::TtpInner,
 
     #[clap(
         long = "institute-ttp-api-key",
@@ -200,7 +200,7 @@ impl MlConfig {
 
         let consent_endpoint = self.url.join("fhir/Consent").unwrap();
 
-        let response: reqwest::Response = reqwest::Client::new()
+        let response: reqwest::Response = self.client
             .post(consent_endpoint)
             .header("Authorization", format!("MainzellisteToken {}", token.id))
             .header("Content-Type", "application/fhir+json")
