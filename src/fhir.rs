@@ -19,7 +19,7 @@ pub struct FhirServer {
 
 impl FhirServer {
     pub fn new(url: Url, auth: Auth) -> Self {
-        Self { url, auth, client: Client::new() }
+        Self { url, auth, client: CONFIG.client.clone()}
     }
     
     pub async fn post_data_request(

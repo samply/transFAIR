@@ -1,5 +1,5 @@
-mod mainzelliste;
-mod greifswald;
+pub(crate) mod mainzelliste;
+pub mod greifswald;
 
 use std::ops::Deref;
 
@@ -22,7 +22,7 @@ pub struct TtpInner {
     pub project_id_system: String,
 
     #[clap(skip)]
-    client: Client,
+    pub client: Client,
 }
 
 #[derive(Debug, Clone)]

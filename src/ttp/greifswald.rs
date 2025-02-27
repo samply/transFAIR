@@ -16,7 +16,7 @@ use super::TtpError;
 #[derive(Debug, Parser, Clone)]
 pub struct GreifswaldConfig {
     #[clap(flatten)]
-    base: super::TtpInner,
+    pub base: super::TtpInner,
 
     #[clap(long, env, default_value = "transfair")]
     source: String,
