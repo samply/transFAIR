@@ -8,6 +8,7 @@ import de.samply.transfair.mapper.bbmri2beacon.FhirBbmriToBeaconResourceMapper;
 import de.samply.transfair.processor.BbmriBundleToBeaconIndividualProcessor;
 import de.samply.transfair.processor.BbmriBundleToBeaconBiosampleProcessor;
 import de.samply.transfair.reader.FhirConditionReader;
+import de.samply.transfair.reader.FhirCrcReader;
 import de.samply.transfair.reader.FhirImagingStudyReader;
 import de.samply.transfair.reader.FhirObservationReader;
 import de.samply.transfair.reader.FhirOrganizationReader;
@@ -139,6 +140,12 @@ public class BatchConfiguration {
   }
 
   @Bean
+  @Profile("crc2fhir")
+  public FhirResourceMapper crcToFhirMapper() {
+    return new FhirCopyResourceMapper();
+  }
+
+  @Bean
   public ItemReader<Bundle> organizationReader() {
     return new FhirOrganizationReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
@@ -166,6 +173,11 @@ public class BatchConfiguration {
   @Bean
   public ItemReader<Bundle> imagingStudyReader() {
     return new FhirImagingStudyReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
+  }
+
+  @Bean
+  public ItemReader<Bundle> crcReader() {
+    return new FhirCrcReader(ctx.newRestfulGenericClient(fhirProperties.getInput().getUrl()));
   }
 
   @Bean
@@ -422,6 +434,19 @@ public class BatchConfiguration {
             .build();
   }
 
+  @Bean
+  @Profile("crc2fhir")
+  public Step stepCrcToFhir(JobRepository jobRepository,
+                                          PlatformTransactionManager transactionManager,
+                                          FhirBundleProcessor processor) {
+    return new StepBuilder("stepCrcToFhir", jobRepository)
+            .<Bundle, Bundle> chunk(10, transactionManager)
+            .reader(crcReader())
+            .processor(processor)
+            .writer(writer())
+            .build();
+  }
+
 
   @Bean
   @Profile("bbmri2mii")
@@ -484,6 +509,15 @@ public class BatchConfiguration {
     return new JobBuilder("amrToFhirJob", jobRepository)
             .incrementer(new RunIdIncrementer())
             .start(stepAmrToFhir)
+            .build();
+  }
+
+  @Bean
+  @Profile("crc2fhir")
+  public Job crcToFhirJob(JobRepository jobRepository, Step stepCrcToFhir) {
+    return new JobBuilder("crcToFhirJob", jobRepository)
+            .incrementer(new RunIdIncrementer())
+            .start(stepCrcToFhir)
             .build();
   }
 

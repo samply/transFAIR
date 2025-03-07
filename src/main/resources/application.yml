@@ -14,6 +14,8 @@ imgmeta:
   dicomFilePath: ${IMGMETA_DICOM_FILE_PATH:}
 amr:
   filePath: ${AMR_FILE_PATH:}
+crc:
+  patientFilePath: ${CRC_PATIENT_FILE_PATH:}
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}
