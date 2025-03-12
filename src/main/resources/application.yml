@@ -16,6 +16,8 @@ amr:
   filePath: ${AMR_FILE_PATH:}
 crc:
   patientFilePath: ${CRC_PATIENT_FILE_PATH:}
+  patientMaxCount: ${CRC_PATIENT_MAX_COUNT:}
+  specimenFilePath: ${CRC_SPECIMEN_FILE_PATH:}
 data:
   outputFileDirectory: ./test
   writeBundlesToFile: ${WRITE_BUNDLES_TO_FILE:false}

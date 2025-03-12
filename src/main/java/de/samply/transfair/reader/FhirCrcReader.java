@@ -1,19 +1,23 @@
 package de.samply.transfair.reader;
 
+import de.samply.transfair.reader.crc.BiobankBuilder;
+import de.samply.transfair.reader.crc.CollectionBuilder;
+import de.samply.transfair.reader.crc.ConditionBuilder;
 import de.samply.transfair.reader.crc.CsvReader;
 import de.samply.transfair.reader.crc.PatientBuilder;
-import de.samply.transfair.reader.crc.ObservationBuilder;
 import de.samply.transfair.reader.crc.SpecimenBuilder;
+import de.samply.transfair.util.JsonSerializer;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
 
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
-import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.Organization;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -34,6 +38,10 @@ public class FhirCrcReader implements ItemReader<Bundle> {
   private Bundle bundle;
   @Value("${crc.patientFilePath}")
   private String patientFilePath;
+  @Value("${crc.specimenFilePath}")
+  private String specimenFilePath;
+  @Value("${crc.patientMaxCount}")
+  private String patientMaxCount;
 
   public FhirCrcReader(IGenericClient client){
   }
@@ -64,21 +72,27 @@ public class FhirCrcReader implements ItemReader<Bundle> {
 
     PatientBuilder patientBuilder = new PatientBuilder();
     SpecimenBuilder specimenBuilder = new SpecimenBuilder();
-    ObservationBuilder observationBuilder = new ObservationBuilder();
-    int recordCounter = 0;
+    CollectionBuilder collectionBuilder = new CollectionBuilder();
+    BiobankBuilder biobankBuilder = new BiobankBuilder();
+    ConditionBuilder conditionBuilder = new ConditionBuilder();
     for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(patientFilePath)) {
-      Patient patient = patientBuilder.build(record);
-      specimenBuilder.build(patient, record);
-
-      // Create the observation
-      Observation observation = observationBuilder.build(recordCounter, patient, record);
-
-      recordCounter++;
+      log.info("read: patient record: " + JsonSerializer.toJsonString(record));
+      Patient patient = patientBuilder.build(record, patientMaxCount);
+      if (patient == null)
+        break;
+      conditionBuilder.build(patient, record);
+    }
+    for (Map<String, String> record : CsvReader.readCsvFilesInDirectory(specimenFilePath)) {
+      Organization biobank = biobankBuilder.build(record);
+      Organization collection = collectionBuilder.build(biobank, record);
+      specimenBuilder.build(patientBuilder, collection, record);
     }
 
-    observationBuilder.addResourcesToBundle(bundle);
     patientBuilder.addResourcesToBundle(bundle);
     specimenBuilder.addResourcesToBundle(bundle);
+    collectionBuilder.addResourcesToBundle(bundle);
+    biobankBuilder.addResourcesToBundle(bundle);
+    conditionBuilder.addResourcesToBundle(bundle);
 
     return bundle;
   }

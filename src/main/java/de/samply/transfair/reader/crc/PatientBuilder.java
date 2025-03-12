@@ -1,8 +1,10 @@
 package de.samply.transfair.reader.crc;
 
+import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Enumerations.AdministrativeGender;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Map;
 
@@ -10,38 +12,38 @@ import java.util.Map;
  * This is a utility class for constructing FHIR Patient resources and extensions
  * from data extracted from an CRC cohort CSV file.
  */
+@Slf4j
 public class PatientBuilder extends ResourceBuilder {
     /**
      * Builds a FHIR Patient resource using attributes extracted from the record.
      *
-     * @param record A map containing patient data, where keys represent data attributes.
+     * @param record          A map containing patient data, where keys represent data attributes.
+     * @param patientMaxCount
      * @return A constructed Patient resource with populated properties and extensions.
      */
-    public Patient build(Map<String, String> record) {
-        Patient patient = new Patient();
+    public Patient build(Map<String, String> record, String patientMaxCount) {
+        // Limit the number of patients to be processed. Intended to be used for testing purposes.
+        if (patientMaxCount != null && !patientMaxCount.isEmpty() && getResourceMapSize() >= Integer.parseInt(patientMaxCount))
+            return null;
+
+        Patient resource = new Patient();
+        String identifier = generateResourceIdentifier(record);
+        if (resourceMap.containsKey(identifier))
+            return (Patient) resourceMap.get(identifier);
+        resourceMap.put(identifier, resource);
+
+        setId(resource);
+        setIdentifier(resource, identifier);
 
         // Extract patient data from the map and set properties
-        String patientCounter = record.get("PatientCounter");
-        String gender = record.get("Gender");
-        String age = record.get("Age");
-        String laboratoryCode = record.get("LaboratoryCode");
-        String hospitalId = record.get("HospitalId");
-        String hospitalUnitType = record.get("HospitalUnitType");
-
-        // Set the patient's ID
-        IdType patientId = new IdType(patientCounter);
-        patient.setId(patientId);
+        String gender = record.get("sex");
+        String age = record.get("age_at_primary_diagnosis");
 
         // Set other properties (e.g., gender, extensions)
-        patient.setGender(mapStringToAdministrativeGender(gender));
-        addAgeExtension(patient, age);
-        addLaboratoryCodeExtension(patient, laboratoryCode);
-        addHospitalIdExtension(patient, hospitalId);
-        addHospitalUnitTypeExtension(patient, hospitalUnitType);
+        resource.setGender(mapStringToAdministrativeGender(gender));
+        addAgeExtension(resource, age);
 
-        resourceMap.put(patientCounter, patient);
-
-        return patient;
+        return resource;
     }
 
     /**
@@ -52,16 +54,16 @@ public class PatientBuilder extends ResourceBuilder {
      */
     private AdministrativeGender mapStringToAdministrativeGender(String genderValue) {
         switch (genderValue.toUpperCase()) {
-            case "M":
+            case "MALE":
                 return AdministrativeGender.MALE;
-            case "F":
+            case "FEMALE":
                 return AdministrativeGender.FEMALE;
-            case "UNK":
+            case "UNKOWN":
                 return AdministrativeGender.UNKNOWN;
-            case "O":
+            case "OTHER":
                 return AdministrativeGender.OTHER;
             default:
-                return AdministrativeGender.UNKNOWN; // Handle unknown values
+                return AdministrativeGender.UNKNOWN; // Handle values that don't fit any of the above
         }
     }
 

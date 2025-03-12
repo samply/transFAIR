@@ -26,10 +26,13 @@ public class CsvReader {
      * @return A list of records, where each record is represented as a map of column headers to values.
      */
     public static List<Map<String, String>> readCsvFilesInDirectory(String directoryPath) {
+        log.info("readCsvFilesInDirectory: read directory: " + directoryPath);
         List<Map<String, String>> records = new ArrayList<>();
 
         File directory = new File(directoryPath);
         processDirectory(directory, records);
+
+        log.info("readCsvFilesInDirectory: read " + records.size() + " records");
 
         return records;
     }
@@ -42,27 +45,17 @@ public class CsvReader {
      * @param records   The list to which records will be added.
      */
     private static void processDirectory(File directory, List<Map<String, String>> records) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    processDirectory(file, records);
-                } else if (file.isFile() && file.getName().toLowerCase().endsWith(".csv")) {
-                    records.addAll(readCsv(file));
-                }
-            }
+        // Terminate recursion when we get down to a file.
+        if (directory.isFile()) {
+            if (directory.getName().toLowerCase().endsWith(".csv"))
+                records.addAll(readCsv(directory));
+            return;
         }
-    }
 
-    /**
-     * Reads a CSV file and returns a list of records.
-     *
-     * @param path Path to the CSV file to read.
-     * @return A list of records, where each record is represented as a map of column headers to values.
-     */
-    public static List<Map<String, String>> readCsv(String path) {
-        File filePath = new File(path);
-        return readCsv(filePath);
+        File[] files = directory.listFiles();
+        if (files != null)
+            for (File file : files)
+                processDirectory(file, records);
     }
 
     /**
@@ -75,7 +68,7 @@ public class CsvReader {
         List<Map<String, String>> records = new ArrayList<>();
 
         try (Reader reader = new FileReader(file);
-             CSVParser csvParser = CSVFormat.DEFAULT.withHeader().parse(reader)) {
+             CSVParser csvParser = CSVFormat.DEFAULT.withDelimiter(';').withHeader().parse(reader)) {
             log.info("Reading CSV file: " + file.getName());
 
             for (CSVRecord record : csvParser) {
