@@ -19,7 +19,12 @@ pub struct GreifswaldConfig {
     #[clap(flatten)]
     pub base: super::TtpInner,
 
-    #[clap(long, env, default_value = "transfair")]
+
+    #[clap(
+        long = "ttp-gw-source",
+        env = "TTP_GW_SOURCE",
+        default_value = "transfair"
+    )]
     source: String,
 }
 

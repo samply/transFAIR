@@ -8,8 +8,8 @@ function start_bg() {
   trap "echo; echo; docker compose logs; docker compose down" EXIT
 
   # Test Config Setup
-  export INSTITUTE_TTP_URL="http://localhost:8081";
-  export INSTITUTE_TTP_API_KEY="transFAIR-password";
+  export TTP_URL="http://localhost:8081";
+  export TTP_ML_API_KEY="transFAIR-password";
   export PROJECT_ID_SYSTEM="PROJECT_1_ID"
   export FHIR_REQUEST_URL="http://localhost:8085"
   export FHIR_INPUT_URL="http://localhost:8086"
