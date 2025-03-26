@@ -14,8 +14,8 @@ use crate::config::Auth;
 #[derive(Parser, Debug, Clone)]
 pub struct TtpInner {
     #[clap(
-        long = "institute-ttp-url",
-        env = "INSTITUTE_TTP_URL"
+        long = "ttp-url",
+        env = "TTP_URL"
     )]
     pub url: Url,
 
@@ -23,7 +23,11 @@ pub struct TtpInner {
     #[clap(long, env)]
     pub project_id_system: String,
 
-    #[clap(long, env, default_value = "")]
+    #[clap(
+        long = "ttp-auth",
+        env = "TTP_AUTH",
+        default_value = ""
+    )]
     pub ttp_auth: Auth,
 
     #[clap(skip)]

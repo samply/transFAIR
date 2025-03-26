@@ -3,13 +3,13 @@ In diesem Dokument wird ein Testlauf beschrieben, bei dem die einzelnen Schnitts
 
 Für den Testlauf wurden die folgenden Parameter angenommen. Diese entsprechen den Werten aus der beigefügten [[file:docker-compose.yml][docker-compose.yml]]:
 #+PROPERTY: header-args :var
-#+PROPERTY: header-args+ INSTITUTE_TTP_INTERFACE="http://localhost:8081/fhir"
+#+PROPERTY: header-args+ TTP_INTERFACE="http://localhost:8081/fhir"
 #+PROPERTY: header-args+ ROUTINE_CONNECTOR_API_KEY="routine-connector-password"
 #+PROPERTY: header-args+ CONSENT_FHIR_INTERFACE="http://localhost:8085/fhir"
 #+PROPERTY: header-args+ MDAT_FHIR_INTERFACE="http://localhost:8086/fhir"
 #+PROPERTY: header-args+ PROJECT_FHIR_INTERFACE="http://localhost:8095/fhir"
 | Variable                  | Beispiel                   | Beschreibung                                                  |
-| INSTITUTE_TTP_INTERFACE   | http://localhost:8081/fhir | Adresse der Schnittstelle der lokalen Instituts-TTP           |
+| TTP_INTERFACE   | http://localhost:8081/fhir | Adresse der Schnittstelle der lokalen Instituts-TTP           |
 | ROUTINE_CONNECTOR_API_KEY | routine-connector-password | Schlüssel zur Authentifizierung bei der lokalen Instituts-TTP |
 | CONSENT_FHIR_INTERFACE    | http://localhost:8085/fhir |                                                               |
 | MDAT_FHIR_INTERFACE       | http://localhost:8086/fhir |                                                               |
@@ -21,7 +21,7 @@ Die Funktionen der Stand
 Zu Beginn erzeugt der Routine Connector bei der Standort-TTP (in diesem Fall eine Mainzelliste) ein neues Projekt bezogenes Patientenpseudonym.
 #+NAME: patient-fhir-data
 #+begin_src restclient :results value
-POST :INSTITUTE_TTP_INTERFACE/Patient
+POST :TTP_INTERFACE/Patient
 Content-Type: application/fhir+json
 mainzellisteApiKey: :ROUTINE_CONNECTOR_API_KEY
 
@@ -136,7 +136,7 @@ echo "$data" | jq -c '[.identifier[] | select(.system | contains("PROJECT_1_ID")
 ** TODO 1.3) Dokumentation des Consents in Standort-TTP
 Das Consent des Patienten wird zu Dokumentationszwecken auch in der Standort-TTP hinterlegt. Der Routine Connector erhält die FHIR Resource hierfür als Input und ergänzt nur den bereits aus 1.2 bekannten Session Identifier.
 #+begin_src restclient :var session_id=session-id-from-fhir
-POST :INSTITUTE_TTP_INTERFACE/Consent
+POST :TTP_INTERFACE/Consent
 Content-Type: application/fhir+json
 
 {

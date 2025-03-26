@@ -11,8 +11,8 @@ pub struct MlConfig {
     pub base: super::TtpInner,
 
     #[clap(
-        long = "institute-ttp-api-key",
-        env = "INSTITUTE_TTP_API_KEY"
+        long = "ttp-ml-api-key",
+        env = "TTP_ML_API_KEY"
     )]
     pub api_key: String,
 }

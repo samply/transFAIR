@@ -4,13 +4,13 @@ Die Referenzimplementierung übernimmt die Aufgabe, Daten für eingewilligte Pat
 * Konfigurationsparameter
 Um ihre Aufgabe erfüllen zu können, muss die Transferstelle pro Projekt mit folgenden Parametern konfiguriert werden
 #+PROPERTY: header-args :var
-#+PROPERTY: header-args+ INSTITUTE_TTP_INTERFACE="http://localhost:8081/fhir"
+#+PROPERTY: header-args+ TTP_INTERFACE="http://localhost:8081/fhir"
 #+PROPERTY: header-args+ DIZ_API_KEY="diz-password"
 #+PROPERTY: header-args+ CONSENT_FHIR_INTERFACE="http://localhost:8085/fhir"
 #+PROPERTY: header-args+ MDAT_FHIR_INTERFACE="http://localhost:8086/fhir"
 #+PROPERTY: header-args+ ROUTINE_FHIR_INTERFACE="http://localhost:8090/fhir"
 | Variable                | Beispiel                   | Beschreibung                                                                             |
-| INSTITUTE_TTP_INTERFACE | http://localhost:8081/fhir | Adresse der Schnittstelle der Institutes TTP                                             |
+| TTP_INTERFACE | http://localhost:8081/fhir | Adresse der Schnittstelle der TTPs TTP                                             |
 | DIZ_API_KEY             | diz-password               | Schlüssel mit dem auf die Insitute-TTP zugegriffen werden darf                           |
 | CONSENT_FHIR_INTERFACE  | http://localhost:8085/fhir | Adresse des FHIR-Servers in dem Consent Ressourcen vom Routine Connector abgelegt werden |
 | MDAT_FHIR_INTERFACE     | http://localhost:8086/fhir | Adresse des FHIR-Servers in dem die Transferstelle die Routinedaten ablegt               |
@@ -436,7 +436,7 @@ An dieser Stelle muss die Transferstelle aufgrund der Angaben in den Consents ü
 *** 2.3) Ermittlung zugehöriger DIZ Pseudonyme
 Mit der Extrahierten Liste an SESSION_IDs kann die Transferstelle nun bei der lokalen TTP eine Liste von Patienten abfragen. Dafür muss pro Identifier eine Patientenresource abfragt werden:
 #+begin_src restclient
-POST :INSTITUTE_TTP_INTERFACE/Patient/_search
+POST :TTP_INTERFACE/Patient/_search
 Content-Type: application/x-www-form-urlencoded
 MainzellisteApiKey: :DIZ_API_KEY
 

@@ -31,8 +31,8 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
           # Environment for Routine Connector
-          INSTITUTE_TTP_URL = "http://localhost:8081";
-          INSTITUTE_TTP_API_KEY = "routine-connector-password";
+          TTP_URL = "http://localhost:8081";
+          TTP_ML_API_KEY = "routine-connector-password";
           FHIR_REQUEST_URL = "http://localhost:8085";
           # FHIR_REQUEST_CREDENTIALS = "bla:test";
           FHIR_INPUT_URL = "http://localhost:8086";
