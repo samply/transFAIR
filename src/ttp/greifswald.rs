@@ -5,7 +5,7 @@ use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
 use fhir_sdk::r4b::resources::{
     Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
 };
-use fhir_sdk::r4b::types::Coding;
+use fhir_sdk::r4b::types::{Coding, Identifier};
 use tracing::debug;
 
 use crate::config::ClientBuilderExt;
@@ -19,13 +19,11 @@ pub struct GreifswaldConfig {
     #[clap(flatten)]
     pub base: super::TtpInner,
 
-
-    #[clap(
-        long = "ttp-gw-source",
-        env = "TTP_GW_SOURCE",
-        default_value = "transfair"
-    )]
+    #[clap(long = "ttp-gw-source", env = "TTP_GW_SOURCE")]
     source: String,
+
+    #[clap(long = "ttp-gw-domain", env = "TTP_GW_DOMAIN")]
+    matching_domain: String,
 }
 
 impl std::ops::Deref for GreifswaldConfig {
@@ -125,7 +123,10 @@ impl GreifswaldConfig {
     }
 
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
-    pub(super) async fn request_project_pseudonym(&self, patient: &Patient) -> Result<Patient, TtpError> {
+    pub(super) async fn request_project_pseudonym(
+        &self,
+        patient: &Patient,
+    ) -> Result<Patient, TtpError> {
         let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
         let params = Parameters::builder()
             .parameter(vec![
@@ -139,7 +140,7 @@ impl GreifswaldConfig {
                 ParametersParameter::builder()
                     .name("domain".into())
                     .value(ParametersParameterValue::String(
-                        self.project_id_system.clone(),
+                        self.matching_domain.clone(),
                     ))
                     .build()
                     .ok(),
@@ -203,15 +204,73 @@ impl GreifswaldConfig {
         else {
             ttp_bail!("Matching result did not contain a patient: {result:#?}")
         };
-        if person.identifier.iter().flatten().count() == 0 {
-            ttp_bail!("Patient returned by matching did not contain any identifiers")
-        }
+        let Some(mpi_ident) = person
+            .identifier
+            .iter()
+            .flatten()
+            .find(|i| {
+                i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
+            })
+            .and_then(|i| i.value.as_deref())
+        else {
+            ttp_bail!("Patient returned by matching did not contain a mpi identifier")
+        };
         // Do we need to copy over more fields?
         let patient = Patient::builder()
-            .identifier(person.identifier.clone())
+            .identifier(vec![Some(self.request_pseudonym(mpi_ident).await?)])
             .build()
             .unwrap();
         Ok(patient)
+    }
+
+    async fn request_pseudonym(&self, ident: &str) -> Result<Identifier, TtpError> {
+        let url = self
+            .url
+            .join("/ttp-fhir/fhir/gpas/$pseudonymizeAllowCreate")
+            .unwrap();
+        let params = Parameters::builder()
+            .parameter(vec![
+                ParametersParameter::builder()
+                    .name("target".into())
+                    .value(ParametersParameterValue::String(
+                        self.project_id_system.clone(),
+                    ))
+                    .build()
+                    .ok(),
+                ParametersParameter::builder()
+                    .name("original".into())
+                    .value(ParametersParameterValue::String(ident.into()))
+                    .build()
+                    .ok(),
+            ])
+            .build()
+            .unwrap();
+        let parameters = self
+            .client
+            .post(url)
+            .json(&params)
+            .add_auth(&self.ttp_auth)
+            .await?
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Parameters>()
+            .await?;
+        debug!(?parameters, "Got pseudonym response");
+        let Some(pseudonym) = parameters.parameter.get_param_by_name("pseudonym") else {
+            ttp_bail!("Response parameters did not contain a pseudonym")
+        };
+        let Some(pseudonym_value) = pseudonym
+            .part
+            .get_param_by_name("pseudonym")
+            .and_then(|v| v.value.as_ref())
+        else {
+            ttp_bail!("Response did not contain a pseudonym")
+        };
+        let ParametersParameterValue::Identifier(pseudonym_ident) = pseudonym_value else {
+            ttp_bail!("Pseudonym was not an identifier")
+        };
+        Ok(pseudonym_ident.clone())
     }
 }
 
@@ -271,6 +330,7 @@ mod tests {
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
+            matching_domain: "Demo".into(),
         };
         ttp.document_patient_consent(
             Consent::builder()
@@ -290,11 +350,12 @@ mod tests {
         let ttp = GreifswaldConfig {
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
-                project_id_system: "Demo".into(),
+                project_id_system: "Transferstelle A".into(),
                 client: Client::new(),
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
+            matching_domain: "Demo".into(),
         };
         ttp.request_project_pseudonym(&fake_patient())
             .await
