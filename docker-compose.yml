@@ -9,7 +9,7 @@ services:
   mainzelliste:
     image: docker.verbis.dkfz.de/ttp/mainzelliste:consent-fhir
     ports:
-      - 8081:8080
+      - 8082:8080
     environment:
       # Otherwise mainzelliste will request ML_API_KEY
       MANDATORY_VARIABLES: "ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE"
