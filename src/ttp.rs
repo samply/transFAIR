@@ -110,9 +110,9 @@ impl Ttp {
 
     pub async fn document_patient_consent(
         &self,
-        consent: Consent,
+        consent: &Consent,
         patient: &Patient,
-    ) -> Result<Consent, (StatusCode, &'static str)> {
+    ) -> Result<(), (StatusCode, &'static str)> {
         match self {
             Ttp::Mainzelliste(config) => config.document_patient_consent(consent, patient).await,
             Ttp::Greifswald(..) => Err((StatusCode::NOT_IMPLEMENTED, "Documenting patient consent with Greifswald tools is not yet implemented")),

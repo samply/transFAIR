@@ -181,21 +181,23 @@ impl Into<Bundle> for DataRequestPayload {
             .build()
             .unwrap();
 
-        let consent_entry = BundleEntry::builder()
-            .resource(Resource::from(self.consent))
-            .request(
-                BundleEntryRequest::builder()
-                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
-                    .url(String::from("/Consent"))
-                    .build()
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
+        let consent_entry = self.consent.map(|c| {
+            BundleEntry::builder()
+                .resource(Resource::from(c))
+                .request(
+                    BundleEntryRequest::builder()
+                        .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
+                        .url(String::from("/Consent"))
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap()
+        });
 
         Bundle::builder()
             .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
-            .entry(vec![Some(patient_entry), Some(consent_entry)])
+            .entry(vec![Some(patient_entry), consent_entry])
             .build()
             .unwrap()
     }
