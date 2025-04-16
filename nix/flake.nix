@@ -31,7 +31,7 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
           # Environment for Routine Connector
-          TTP_URL = "http://localhost:8081";
+          TTP_URL = "http://localhost:8082";
           TTP_ML_API_KEY = "routine-connector-password";
           FHIR_REQUEST_URL = "http://localhost:8085";
           # FHIR_REQUEST_CREDENTIALS = "bla:test";
@@ -49,7 +49,7 @@
           ML_ROUTINE_CONNECTOR_PASSPHRASE = "routine-connector-password";
           ML_DIZ_PASSPHRASE = "diz-password";
           ML_LOG_LEVEL = "debug";
-          # TLS_CA_CERTIFICATES_DIR = "./test-certs";
+          TLS_CA_CERTIFICATES_DIR = "./test-certs";
           # Start Compose Environment when opening Project
           shellHook = ''
             docker compose up -d
