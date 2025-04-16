@@ -34,7 +34,7 @@ pub struct DataRequest {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DataRequestPayload {
     pub patient: Patient,
-    pub consent: Consent
+    pub consent: Option<Consent>
 }
 
 // POST /requests; Creates a new Data Request
@@ -42,7 +42,7 @@ pub async fn create_data_request(
     State(database_pool): State<Pool<Sqlite>>,
     Json(payload): Json<DataRequestPayload>
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
-    let mut consent = payload.consent;
+    let consent = payload.consent;
     let mut patient = payload.patient;
 
     let mut project_identifier = None;
@@ -55,7 +55,9 @@ pub async fn create_data_request(
         patient = ttp.request_project_pseudonym(&mut patient).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
-        consent = ttp.document_patient_consent(consent, &patient).await?;
+        if let Some(ref consent) = consent {
+            ttp.document_patient_consent(consent, &patient).await?;
+        }
         trace!("TTP returned this consent for Patient {:?}", consent);
 
         // TODO: Safe way for unwrap
@@ -76,11 +78,12 @@ pub async fn create_data_request(
     };
 
     patient = patient.pseudonymize()?;
-    consent = link_patient_consent(&consent, &patient)?;
-    // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden 
+
+    let linked_consent = consent.map(|c| link_patient_consent(c, &patient)).transpose()?;
+    // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
     let data_request_id = REQUEST_SERVER.post_data_request(DataRequestPayload {
         patient,
-        consent
+        consent: linked_consent
     }).await?;
 
     let data_request = DataRequest {
@@ -140,14 +143,13 @@ pub async fn get_data_request(
     }
 }
 
-fn link_patient_consent(consent: &Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
-    let mut linked_consent = consent.clone();
+fn link_patient_consent(mut consent: Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
     let exchange_identifier= patient.get_identifier(&CONFIG.exchange_id_system);
     let Some(exchange_identifier) = exchange_identifier else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
     };
-    linked_consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
-    Ok(linked_consent)
+    consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
+    Ok(consent)
 }
 
 pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>, database_pool: &Pool<Sqlite>) -> sqlx::Result<()> {

@@ -173,9 +173,9 @@ impl MlConfig {
 
     pub(super) async fn document_patient_consent(
         &self,
-        consent: Consent,
+        consent: &Consent,
         patient: &Patient,
-    ) -> Result<Consent, (StatusCode, &'static str)> {
+    ) -> Result<(), (StatusCode, &'static str)> {
         if consent.patient.is_some() {
             warn!(
                 "Received request with consent that already contained patient identifiers: {:?}",
@@ -218,7 +218,7 @@ impl MlConfig {
 
         debug!("Response from TTP for Consent request: status={} text={}", response.status(), response.text().await.unwrap());
 
-        Ok(consent)
+        Ok(())
     }
 }
 
