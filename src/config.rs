@@ -35,8 +35,12 @@ pub struct Config {
     pub fhir_output_url: Url,
     #[clap(long, env, default_value = "")]
     pub fhir_output_credentials: Auth,
+    /// Trusted tls root certificates
     #[clap(long, env)]
     pub tls_ca_certificates_dir: Option<PathBuf>,
+    /// Disable TLS verification
+    #[clap(long, env, default_value_t = false)]
+    pub tls_disable: bool,
 
     #[clap(skip)]
     pub client: Client,
@@ -48,7 +52,7 @@ impl Config {
         let cmd = ttp::Ttp::augment_args(cmd);
         let args_matches = cmd.get_matches();
         let mut this = Self::from_arg_matches(&args_matches).map_err(|e| e.exit()).unwrap();
-        let ca_client = build_client(&this.tls_ca_certificates_dir);
+        let ca_client = build_client(&this.tls_ca_certificates_dir, this.tls_disable);
         this.client = ca_client.clone();
         let mut ttp = Ttp::from_arg_matches(&args_matches).ok();
         if let Some(ref mut ttp) = ttp {
@@ -60,22 +64,26 @@ impl Config {
     }
 }
 
-fn build_client(tls_ca_certificates_dir: &Option<PathBuf>) -> Client {
-   let mut client_builder = Client::builder();
-   if let Some(tls_ca_dir) = tls_ca_certificates_dir {
-       info!("Loading available custom ca certificates from {:?}", tls_ca_certificates_dir);
-       for path_res in tls_ca_dir.read_dir().expect(&format!("Unable to read {:?}", tls_ca_certificates_dir)) {
-           if let Ok(path_buf) = path_res {
-               client_builder = client_builder.add_root_certificate(
-                   Certificate::from_pem(
-                       &fs::read(path_buf.path()).expect(&format!("Unable to read file provided: {:?}", path_buf.path()))
-                   ).expect(&format!("Unable to convert {:?} to a certificate. Please verify it is a valid pem file", path_buf.path()))
-               );
-           }
-       }
-   }
+fn build_client(tls_ca_certificates_dir: &Option<PathBuf>, disable_tls: bool) -> Client {
+    let mut client_builder = Client::builder();
+    client_builder = client_builder
+        .danger_accept_invalid_hostnames(disable_tls)
+        .danger_accept_invalid_certs(disable_tls);
+    if let Some(tls_ca_dir) = tls_ca_certificates_dir {
+        info!("Loading available custom ca certificates from {:?}", tls_ca_certificates_dir);
+        for path_res in tls_ca_dir.read_dir().expect(&format!("Unable to read {:?}", tls_ca_certificates_dir)) {
+            if let Ok(path_buf) = path_res {
+                info!("Adding custom ca certificate {:?}", path_buf.path());
+                client_builder = client_builder.add_root_certificate(
+                    Certificate::from_pem(
+                        &fs::read(path_buf.path()).expect(&format!("Unable to read file provided: {:?}", path_buf.path()))
+                    ).expect(&format!("Unable to convert {:?} to a certificate. Please verify it is a valid pem file", path_buf.path()))
+                );
+            }
+        }
+    }
 
-   client_builder.build().expect("Unable to initially build reqwest client")
+    client_builder.build().expect("Unable to initially build reqwest client")
 }
 
 #[derive(Debug, Clone)]
