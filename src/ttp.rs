@@ -153,7 +153,7 @@ impl IntoResponse for TtpError {
 
 #[macro_export]
 macro_rules! ttp_bail {
-    ($tokens:tt) => {
-        return Err(TtpError::Other(anyhow::anyhow!($tokens)))
+    ($($tokens:tt)*) => {
+        return Err(TtpError::Other(anyhow::anyhow!($($tokens)*)))
     };
 }
