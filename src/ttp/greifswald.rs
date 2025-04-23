@@ -94,15 +94,18 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let bundle = self
+        let res = self
             .client
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
             .await?
             .send()
-            .await?
-            .error_for_status()?
+            .await?;
+        if let Err(e) = res.error_for_status_ref() {
+            ttp_bail!("Error while sending consent: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+        }
+        let bundle = res
             .json::<Bundle>()
             .await?;
         let Resource::Consent(c) = bundle
@@ -171,15 +174,18 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let parameters = self
+        let res = self
             .client
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
             .await?
             .send()
-            .await?
-            .error_for_status()?
+            .await?;
+        if let Err(e) = res.error_for_status_ref() {
+            ttp_bail!("Error while matching patient: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+        }
+        let parameters = res
             .json::<Parameters>()
             .await?;
         debug!(?parameters);
@@ -245,15 +251,18 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let parameters = self
+        let res = self
             .client
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
             .await?
             .send()
-            .await?
-            .error_for_status()?
+            .await?;
+        if let Err(e) = res.error_for_status_ref() {
+            ttp_bail!("Error requesting pseudonym: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+        }
+        let parameters = res
             .json::<Parameters>()
             .await?;
         debug!(?parameters, "Got pseudonym response");
