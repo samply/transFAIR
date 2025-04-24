@@ -109,30 +109,19 @@ impl FhirServer {
 
 pub trait PatientExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
-    fn add_id_request(self, id: String) -> axum::response::Result<Self>;
+    fn add_id_request(self, id: String) -> Self;
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier>;
 }
 
 impl PatientExt for Patient {
-    fn add_id_request(mut self, id: String) -> axum::response::Result<Self> {
+    fn add_id_request(mut self, id: String) -> Self {
         let request = Identifier::builder()
             .r#use(IdentifierUse::Secondary)
             .system(id)
             .build()
-            .map_err(|err| {
-                // TODO: Ensure that this will be a fatal error, as otherwise the linkage will not be possible
-                error!(
-                    "Unable to add token request to data request. See error message: {}",
-                    err
-                );
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Unable to add token request to data request",
-                )
-            })
-            .unwrap();
+            .expect("Vailid identifier system");
         self.identifier.push(Some(request));
-        Ok(self)
+        self
     }
 
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier> {
@@ -221,7 +210,7 @@ mod tests {
     #[test]
     fn add_id_request() {
         let mut patient = Patient::builder().build().unwrap();
-        patient = patient.add_id_request("SOME_SYSTEM".to_string()).unwrap();
+        patient = patient.add_id_request("SOME_SYSTEM".to_string());
         let identifier = patient.identifier[0]
             .as_ref()
             .expect("Add id request didn't add an identifier to empty patient");
