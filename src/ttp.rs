@@ -121,7 +121,7 @@ impl Ttp {
 
     pub async fn request_project_pseudonym(
         &self,
-        patient: &Patient,
+        patient: Patient,
     ) -> axum::response::Result<Patient> {
         match self {
             Ttp::Mainzelliste(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),

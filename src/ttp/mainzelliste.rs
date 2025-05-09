@@ -5,6 +5,10 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
+use crate::{fhir::PatientExt, CONFIG};
+
+use super::TtpError;
+
 #[derive(Debug, Parser, Clone)]
 pub struct MlConfig {
     #[clap(flatten)]
@@ -92,8 +96,11 @@ impl MlConfig {
 
     pub(super) async fn request_project_pseudonym(
         &self,
-        patient: &Patient,
-    ) -> Result<Patient, (StatusCode, &'static str)> {
+        patient: Patient,
+    ) -> Result<Patient, TtpError> {
+        let patient = patient
+          .add_id_request(CONFIG.exchange_id_system.clone())
+          .add_id_request(self.project_id_system.clone());
         // TODO: Need to ensure request for project pseudonym is included
         let patients_endpoint = self.url.join("fhir/Patient").unwrap();
 

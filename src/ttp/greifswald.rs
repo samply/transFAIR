@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::config::ClientBuilderExt;
 use crate::fhir::ParameterExt;
-use crate::ttp_bail;
+use crate::{ttp_bail, CONFIG};
 
 use super::TtpError;
 
@@ -22,8 +22,11 @@ pub struct GreifswaldConfig {
     #[clap(long = "ttp-gw-source", env = "TTP_GW_SOURCE")]
     source: String,
 
-    #[clap(long = "ttp-gw-domain", env = "TTP_GW_DOMAIN")]
-    matching_domain: String,
+    #[clap(long = "ttp-gw-epix-domain", env = "TTP_GW_EPIX_DOMAIN")]
+    epix_domain: String,
+
+    #[clap(long = "ttp-gw-gpas-domain", env = "TTP_GW_GPAS_DOMAIN")]
+    gpas_domain: String,
 }
 
 impl std::ops::Deref for GreifswaldConfig {
@@ -39,10 +42,8 @@ impl GreifswaldConfig {
         self.client.get(self.url.clone()).send().await.is_ok()
     }
 
-    // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html ???????????
-    pub async fn check_idtype_available(&self, _idtype: &str) -> bool {
-        // TODO: implement
-        true
+    pub async fn check_idtype_available(&self, idtype: &str) -> bool {
+        idtype == "https://ths-greifswald.de/fhir/gpas" || idtype.starts_with("https://ths-greifswald.de/fhir/epix/identifier/")
     }
 
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Einwilligungsmanagement-Operations-addConsent.html
@@ -73,7 +74,7 @@ impl GreifswaldConfig {
                 ParametersParameter::builder()
                     .name("domain".into())
                     .value(ParametersParameterValue::String(
-                        self.project_id_system.clone(),
+                        self.gpas_domain.clone(),
                     ))
                     .build()
                     .ok(),
@@ -128,7 +129,7 @@ impl GreifswaldConfig {
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
     pub(super) async fn request_project_pseudonym(
         &self,
-        patient: &Patient,
+        mut patient: Patient,
     ) -> Result<Patient, TtpError> {
         let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
         let params = Parameters::builder()
@@ -143,7 +144,7 @@ impl GreifswaldConfig {
                 ParametersParameter::builder()
                     .name("domain".into())
                     .value(ParametersParameterValue::String(
-                        self.matching_domain.clone(),
+                        self.epix_domain.clone(),
                     ))
                     .build()
                     .ok(),
@@ -168,7 +169,10 @@ impl GreifswaldConfig {
                     .ok(),
                 ParametersParameter::builder()
                     .name("identity".into())
-                    .resource(patient.clone().into())
+                    .resource(Resource::Patient({
+                        patient.identifier = Vec::new();
+                        patient
+                    }))
                     .build()
                     .ok(),
             ])
@@ -210,20 +214,29 @@ impl GreifswaldConfig {
         else {
             ttp_bail!("Matching result did not contain a patient: {result:#?}")
         };
-        let Some(mpi_ident) = person
+        let Some(ex_id) = person
             .identifier
             .iter()
             .flatten()
             .find(|i| {
-                i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
+                if cfg!(test) {
+                    i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
+                } else {
+                    i.system.as_deref() == Some(&CONFIG.exchange_id_system)
+                }
             })
             .and_then(|i| i.value.as_deref())
         else {
             ttp_bail!("Patient returned by matching did not contain a mpi identifier")
         };
-        // Do we need to copy over more fields?
-        let patient = Patient::builder()
-            .identifier(vec![Some(self.request_pseudonym(mpi_ident).await?)])
+        let mut pb = Patient::builder();
+        if let Some(ref id) = person.id {
+            pb = pb.id(id.clone());
+        }
+        let mut idents = person.identifier.clone();
+        idents.push(Some(self.request_pseudonym(ex_id).await?));
+        let patient = pb
+            .identifier(idents)
             .build()
             .unwrap();
         Ok(patient)
@@ -239,7 +252,7 @@ impl GreifswaldConfig {
                 ParametersParameter::builder()
                     .name("target".into())
                     .value(ParametersParameterValue::String(
-                        self.project_id_system.clone(),
+                        self.gpas_domain.clone(),
                     ))
                     .build()
                     .ok(),
@@ -339,7 +352,8 @@ mod tests {
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
-            matching_domain: "Demo".into(),
+            epix_domain: "Demo".into(),
+            gpas_domain: "MII".into(),
         };
         ttp.document_patient_consent(
             Consent::builder()
@@ -364,11 +378,12 @@ mod tests {
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
-            matching_domain: "Demo".into(),
+            epix_domain: "Demo".into(),
+            gpas_domain: "Transferstelle A".into(),
         };
-        ttp.request_project_pseudonym(&fake_patient())
+        dbg!(ttp.request_project_pseudonym(fake_patient())
             .await
-            .unwrap();
+            .unwrap());
     }
 
     fn fake_patient() -> Patient {

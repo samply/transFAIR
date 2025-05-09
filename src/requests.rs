@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use axum::{extract::{Path, State}, Json};
 
 use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
@@ -27,6 +25,7 @@ pub struct DataRequest {
     pub id: String,
     pub status: RequestStatus,
     pub message: Option<String>,
+    // FIXME: Applications should not know the exchange id right?
     pub exchange_id: String,
     pub project_id: Option<String>,
 }
@@ -48,11 +47,8 @@ pub async fn create_data_request(
     let mut project_identifier = None;
 
     if let Some(ttp) = &CONFIG.ttp {
-        patient = patient
-          .add_id_request(CONFIG.exchange_id_system.clone())?
-          .add_id_request(ttp.project_id_system.clone())?;
         // pseudonymize the patient
-        patient = ttp.request_project_pseudonym(&mut patient).await?;
+        patient = ttp.request_project_pseudonym(patient).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         if let Some(ref consent) = consent {
@@ -60,8 +56,7 @@ pub async fn create_data_request(
         }
         trace!("TTP returned this consent for Patient {:?}", consent);
 
-        // TODO: Safe way for unwrap
-        project_identifier = patient.get_identifier(&ttp.project_id_system).cloned().unwrap().value.clone();
+        project_identifier = patient.get_identifier(&ttp.project_id_system).and_then(|i| i.value.clone());
     }
 
     // ensure that we have at least one identifier with which we can link
@@ -89,7 +84,7 @@ pub async fn create_data_request(
     let data_request = DataRequest {
         id: data_request_id,
         status: RequestStatus::Created,
-        message: Some(String::from_str("Data Request created!").unwrap()),
+        message: Some(String::from("Data Request created!")),
         exchange_id: exchange_identifier.to_string(),
         project_id: project_identifier
     };
