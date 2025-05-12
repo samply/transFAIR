@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{fhir::PatientExt, CONFIG};
+use crate::{fhir::PatientExt, ttp_bail, CONFIG};
 
 use super::TtpError;
 
@@ -109,29 +109,14 @@ impl MlConfig {
             .header("mainzellisteApiKey", &self.api_key)
             .json(&patient)
             .send()
-            .await
-            .map_err(|err| {
-                warn!("Failed to communicate with mainzelliste: {}", err);
-                (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "Failed to communicate with mainzelliste: {}",
-                    err,
-                )
-            })
-            .unwrap();
+            .await?;
 
+        if let Err(err) = response.error_for_status_ref() {
+            ttp_bail!("Error requesting project pseudonym from Mainzelliste: {err:#}\n Got response: {}", response.text().await?);
+        }
         let patient = response
             .json::<Patient>()
-            .await
-            .map_err(|err| {
-                warn!("Couldn't parse mainzelliste response as json: {}", err);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Couldn't parse mainzelliste response as json: {}",
-                    err,
-                )
-            })
-            .unwrap();
+            .await?;
 
         Ok(patient)
     }
