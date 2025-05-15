@@ -1,9 +1,9 @@
 //! Client implementation for Mainzelliste TTP
 use clap::Parser;
-use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
+use fhir_sdk::r4b::{codes::IdentifierUse, resources::{Consent, IdentifiableResource, Patient}, types::{Identifier, Reference}};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace, warn, error};
 
 use crate::{fhir::PatientExt, ttp_bail, CONFIG};
 
@@ -158,9 +158,10 @@ impl MlConfig {
             .json::<Token>()
             .await
             .map_err(|err| {
+                debug!("{:?}", err);
                 warn!("Unable to parse token returned by mainzelliste: {}", err);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Unable to Parse Token from Mainzelliste: {}")
-            }) 
+            })
     }
 
     pub(super) async fn document_patient_consent(
@@ -179,15 +180,38 @@ impl MlConfig {
             ));
         }
 
-        // TODO: Needs to be done outside of mainzelliste.rs
-        let mut consent_with_identifiers = consent.clone(); 
-        // TODO: Mainzelliste currently says the identifier don't have a proper system, maybe need to add the URL?
-        consent_with_identifiers.set_identifier(patient.identifier.clone());
+        let mut consent_with_identifiers = consent.clone();
+
+        // let mut identifiers = patient.identifier.clone();
+        // let identifiers_modified: Vec<Option<Identifier>> = identifiers.iter_mut().map(|identifier| {
+        //     let Some(identifier) = identifier else {
+        //         return None
+        //     };
+        //     identifier.system = match &mut identifier.system {
+        //         Some(system) => Some(format!("{}pid/{}", &CONFIG.ttp.clone().expect("Running in mainzelliste and expecting ttp is configured").url, system)),
+        //         None => None,
+        //     };
+        //     // TODO Search better way to do this
+        //     Some(identifier.clone())
+        // }).collect();
+
+        let Some(exchange_identifier) = patient.get_identifier(&CONFIG.exchange_id_system) else {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to retrieve patient exchange identifier"))
+        };
+        let Some(exchange_identifier_value) = exchange_identifier.value.clone() else {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to retrieve patient exchange identifiers value"))
+        };
+        let patient_identifier = Identifier::builder()
+            .system(format!("{}pid/{}", &CONFIG.ttp.clone().expect("Running in mainzelliste and expecting ttp is configured").url, &CONFIG.exchange_id_system))
+            .value(exchange_identifier_value)
+            .r#use(IdentifierUse::Official)
+            .build().expect("Unable to create new FHIR Identifier for Consent");
+        consent_with_identifiers.patient = Some(Reference::builder().identifier(patient_identifier).build().expect("Unable to construct patient reference in consent"));
 
         trace!("{:?}", consent_with_identifiers);
 
-        let session = self.create_mainzelliste_session().await?; 
-        
+        let session = self.create_mainzelliste_session().await?;
+
         let token = self.create_mainzelliste_token(session, TokenType::AddConsent).await?;
 
         let consent_endpoint = self.url.join("fhir/Consent").unwrap();
@@ -208,7 +232,14 @@ impl MlConfig {
             })
             .unwrap();
 
-        debug!("Response from TTP for Consent request: status={} text={}", response.status(), response.text().await.unwrap());
+        if response.status().is_client_error() || response.status().is_server_error() {
+            let error_status = response.status().clone();
+            error!("Failed to add consent to Mainzelliste. Error is {}", response.text().await.expect("Mainzelliste returned not a text response"));
+            return Err((
+                error_status,
+                "Failed to add consent to Mainzelliste"
+            ))
+        }
 
         Ok(())
     }
@@ -217,7 +248,7 @@ impl MlConfig {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all="camelCase")]
 enum TokenType {
-    // #[serde(with = "TokenType")] 
+    // #[serde(with = "TokenType")]
     AddConsent
 }
 
@@ -235,5 +266,5 @@ struct TokenRequest {
 
 #[derive(Deserialize, Debug)]
 struct Session {
-    uri: String 
+    uri: String
 }

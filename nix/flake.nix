@@ -31,7 +31,8 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
           # Environment for Routine Connector
-          TTP_URL = "http://localhost:8082";
+          # TTP_URL = "http://localhost:8082";
+          TTP_URL = "http://test.local:8082";
           TTP_ML_API_KEY = "routine-connector-password";
           FHIR_REQUEST_URL = "http://localhost:8085";
           # FHIR_REQUEST_CREDENTIALS = "bla:test";
@@ -42,8 +43,8 @@
           EXCHANGE_ID_SYSTEM = "SESSION_ID";
           PROJECT_ID_SYSTEM = "PROJECT_1_ID";
           DATABASE_URL = "sqlite://data_requests.sql?mode=rwc";
-          RUST_LOG = "info";
-          no_proxy = "localhost";
+          RUST_LOG = "trace";
+          no_proxy = "localhost,test.local";
           # Environment for Mainzelliste
           ML_DB_PASS = "my-secret-db-password";
           ML_ROUTINE_CONNECTOR_PASSPHRASE = "routine-connector-password";
