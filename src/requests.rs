@@ -51,8 +51,9 @@ pub async fn create_data_request(
         patient = ttp.request_project_pseudonym(patient).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
-        if let Some(ref consent) = consent {
-            ttp.document_patient_consent(consent, &patient).await?;
+        if let Some(ref _consent) = consent {
+            // FIXME: Currently not working, Patient is not found
+            // ttp.document_patient_consent(consent, &patient).await?;
         }
         trace!("TTP returned this consent for Patient {:?}", consent);
 
