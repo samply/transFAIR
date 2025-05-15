@@ -26,7 +26,7 @@ impl FhirServer {
         &self,
         payload: DataRequestPayload
     ) -> Result<String, (StatusCode, &'static str)> {
-        let bundle_endpoint = format!("{}fhir", self.url);
+        let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Posting request for DIC to {}", self.url);
 
         let bundle: Bundle = payload.into();
