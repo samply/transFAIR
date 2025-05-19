@@ -132,14 +132,29 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 _ => continue,
             };
 
-            let Some(bundle_id) = entry_bundle.id.as_ref().cloned() else {
+            let Some(bundle_id) = entry_bundle.identifier.as_ref().cloned() else {
                 error!("Received bundle without identifier. No link to data request is possible.");
+                continue;
+            };
+
+            let Some(ref bundle_id_system) = bundle_id.system else {
+                error!("Bundle identifier contains no system.");
+                continue;
+            };
+
+            if bundle_id_system != "DATAREQUEST_ID" {
+                error!("Bundle identifier has invalid system. Please provide an identifier with system \"DATAREQUEST_ID\"");
+                continue;
+            };
+
+            let Some(ref bundle_id_value) = bundle_id.value else {
+                error!("Bundle identifier has no value. Link to data request not possible");
                 continue;
             };
 
             let mut linkage_results = None;
             if let Some(ttp) = &CONFIG.ttp {
-                linkage_results = Some(replace_exchange_identifiers(&bundle_id, entry_bundle, ttp, &database_pool).await?);
+                linkage_results = Some(replace_exchange_identifiers(bundle_id_value, entry_bundle, ttp, &database_pool).await?);
             };
 
             // TODO: integrate transformation using transfair-batch here
@@ -302,7 +317,7 @@ mod tests {
 
         // deliver data from external site
         reqwest::Client::new()
-            .put(format!("http://localhost:8086/fhir/Bundle/{}", data_request.id.clone()))
+            .post("http://localhost:8086/fhir/Bundle")
             .json(&json)
             .header("Content-Type", "application/fhir+json")
             .send()
