@@ -11,7 +11,6 @@ curl -k "http://localhost:8086/fhir/Bundle" \
 --data-binary @- <<EOF
 {
     "identifier": {
-        "use": "temp",
         "system": "DATAREQUEST_ID",
         "value": "ABCDEFGHIJKLMNOP"
     },

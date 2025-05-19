@@ -1,6 +1,5 @@
 {
     "identifier": {
-        "use": "temp",
         "system": "DATAREQUEST_ID",
         "value": "<<data_request_id>>"
     },
