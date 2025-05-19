@@ -49,12 +49,12 @@ pub struct Config {
 impl Config {
     pub fn parse() -> Self {
         let cmd = Config::command();
-        let cmd = ttp::Ttp::augment_args(cmd);
+        let ttp_cmd = ttp::Ttp::augment_args(cmd.clone());
         let args_matches = cmd.get_matches();
         let mut this = Self::from_arg_matches(&args_matches).map_err(|e| e.exit()).unwrap();
         let ca_client = build_client(&this.tls_ca_certificates_dir, this.tls_disable);
         this.client = ca_client.clone();
-        let mut ttp = Ttp::from_arg_matches(&args_matches).ok();
+        let mut ttp = ttp_cmd.try_get_matches().ok().and_then(|matches| Ttp::from_arg_matches(&matches).ok());
         if let Some(ref mut ttp) = ttp {
             let (Ttp::Mainzelliste(MlConfig {base, ..}) | Ttp::Greifswald(GreifswaldConfig {base, ..})) = ttp;
             base.client = ca_client.clone();
