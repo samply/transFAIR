@@ -1,7 +1,18 @@
+#!/usr/bin/env sh
+# call from repository root:
+#   sh docs/api/provide-data-for-request.sh
+#
+# this script provides exemplary for data request "ABCDEFGHIJKLMNOP" and
+# the patient patient with SESSION_ID "12345678"
+
+curl -k "http://localhost:8086/fhir/Bundle" \
+-X POST \
+-H "Content-Type: application/fhir+json" \
+--data-binary @- <<EOF
 {
     "identifier": {
         "system": "DATAREQUEST_ID",
-        "value": "<<data_request_id>>"
+        "value": "ABCDEFGHIJKLMNOP"
     },
     "resourceType": "Bundle",
     "type": "transaction",
@@ -46,7 +57,7 @@
                 "subject": {
                     "identifier": {
                         "system": "SESSION_ID",
-                        "value": "<<session_id>>"
+                        "value": "12345678"
                     }
                 }
             },
@@ -92,7 +103,7 @@
                 "subject": {
                     "identifier": {
                         "system": "SESSION_ID",
-                        "value": "<<session_id>>"
+                        "value": "12345678"
                     }
                 }
             },
@@ -103,3 +114,4 @@
         }
     ]
 }
+EOF
