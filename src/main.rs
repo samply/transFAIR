@@ -13,7 +13,7 @@ use tracing::{debug, error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use ttp::Ttp;
 
-use crate::requests::{create_data_request, list_data_requests, get_data_request};
+use crate::{fhir::PatientExt, requests::{create_data_request, list_data_requests, get_data_request}};
 
 mod banner;
 mod config;
@@ -219,17 +219,26 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
         };
 
         let rt = resource.resource_type();
-        let reference = match resource {
+        let identifier = match resource {
+            Resource::Patient(patient) => patient.get_identifier_mut(&CONFIG.exchange_id_system),
             Resource::Consent(consent) => match consent.patient.as_mut() {
-                Some(patient) => patient,
+                Some(patient) => patient.identifier.as_mut(),
                 None => return Err(LinkageError::NoReference(rt))
             },
-            Resource::Condition(condition) => &mut condition.subject,
-            Resource::Procedure(procedure) => &mut procedure.subject,
+            Resource::Condition(condition) => condition.subject.identifier.as_mut(),
+            Resource::Procedure(procedure) => procedure.subject.identifier.as_mut(),
+            Resource::Encounter(encounter) => match encounter.subject.as_mut() {
+                Some(subject) => subject.identifier.as_mut(),
+                None => return Err(LinkageError::NoReference(rt))
+            },
+            Resource::Observation(observation) => match observation.subject.as_mut() {
+                Some(subject) => subject.identifier.as_mut(),
+                None => return Err(LinkageError::NoReference(rt))
+            },
             _ => return Err(LinkageError::UnknownResource(rt))
         };
 
-        let Some(identifier) = &mut reference.identifier else {
+        let Some(identifier) = identifier else {
             return Err(LinkageError::MissingIdentifier(rt))
         };
 
