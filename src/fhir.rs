@@ -132,19 +132,19 @@ impl PatientExt for Patient {
     }
 
     fn pseudonymize(self) -> axum::response::Result<Self> {
-        let id = self.id.clone().unwrap();
-        let exchange_identifier_pos = self
+        let Some(exchange_identifier) = self
             .identifier
             .iter()
-            .position(|x| {
-                x.clone()
-                    .is_some_and(|y| y.system == Some(CONFIG.exchange_id_system.clone()))
-            })
-            .unwrap();
-        let exchange_identifier = self.identifier.get(exchange_identifier_pos).cloned();
+            .find(|x| {
+                x.as_ref().is_some_and(|y| y.system.as_deref() == Some(&CONFIG.exchange_id_system))
+            }) else {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("Request did not contain identifier of system {}", &CONFIG.exchange_id_system)
+                ).into());
+            };
         let pseudonymized_patient = Patient::builder()
-            .id(id)
-            .identifier(vec![exchange_identifier.unwrap()])
+            .identifier(vec![exchange_identifier.clone()])
             .build()
             .map_err(|err| {
                 (
