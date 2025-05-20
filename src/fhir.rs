@@ -111,6 +111,7 @@ pub trait PatientExt: Sized {
     fn pseudonymize(self) -> axum::response::Result<Self>;
     fn add_id_request(self, id: String) -> Self;
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier>;
+    fn get_identifier_mut(&mut self, id_system: &str) -> Option<&mut Identifier>;
 }
 
 impl PatientExt for Patient {
@@ -127,6 +128,13 @@ impl PatientExt for Patient {
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier> {
         self.identifier
             .iter()
+            .flatten()
+            .find(|x| x.system.as_deref() == Some(id_system))
+    }
+
+    fn get_identifier_mut(&mut self, id_system: &str) -> Option<&mut Identifier> {
+        self.identifier
+            .iter_mut()
             .flatten()
             .find(|x| x.system.as_deref() == Some(id_system))
     }
