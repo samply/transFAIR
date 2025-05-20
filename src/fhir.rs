@@ -1,10 +1,8 @@
 use anyhow::Context;
 use chrono::NaiveDateTime;
-use fhir_sdk::r4b::{
-    codes::IdentifierUse,
-    resources::{Bundle, BundleEntry, BundleEntryRequest, ParametersParameter, Patient, Resource},
-    types::Identifier,
-};
+use fhirbolt::{model::r4b::{
+    resources::{Bundle, BundleEntry, BundleEntryRequest, ParametersParameter, Patient}, types::{Code, Identifier, Uri}, Resource
+}, serde::{DeserializeResourceOwned, SerializeResource}};
 use reqwest::{header, Client, StatusCode, Url};
 use tracing::{debug, error, warn};
 
@@ -37,7 +35,7 @@ impl FhirServer {
             .await
             .unwrap()
             .header(header::CONTENT_TYPE, "application/json+fhir")
-            .json(&bundle)
+            .json(&fhirbolt::serde::json::to_vec(&bundle, None).unwrap())
             .send()
             .await
             .map_err(|err| {
@@ -59,7 +57,7 @@ impl FhirServer {
             ));
         };
 
-        let bundle = response.json::<Bundle>()
+        let bundle = response.fhir_json::<Bundle>()
             .await
             .map_err(|err| {
                 error!("Unable to parse consent returned by fhir server: {}", err);
@@ -67,8 +65,7 @@ impl FhirServer {
             })?;
 
         Ok(bundle
-            .id
-            .clone()
+            .id.and_then(|id| id.value)
             .expect("Consent Server returned bundle without id."))
     }
 
@@ -87,7 +84,7 @@ impl FhirServer {
             .context("Unable to query data from input server")?;
         // TODO: Account for more samples using the bundels next link
         response
-            .json::<Bundle>()
+            .fhir_json::<Bundle>()
             .await
             .context("Unable to response from input server")
     }
@@ -100,10 +97,33 @@ impl FhirServer {
             .post(bundle_endpoint)
             .add_auth(&self.auth)
             .await?
-            .json(&bundle)
+            .fhir_json(bundle)?
             .send()
             .await
             .context("Unable to post data to output fhir server")
+    }
+}
+
+pub trait FhirResponseExt {
+    async fn fhir_json<T: DeserializeResourceOwned>(self) -> anyhow::Result<T>;
+}
+
+impl FhirResponseExt for reqwest::Response {
+    async fn fhir_json<T: DeserializeResourceOwned>(self) -> anyhow::Result<T> {
+        fhirbolt::serde::json::from_slice(&self.bytes().await?, None).map_err(Into::into)
+    }
+}
+
+pub trait FhirRequestExt: Sized {
+    fn fhir_json<T: SerializeResource>(self, input: &T) -> anyhow::Result<Self>;
+}
+
+impl FhirRequestExt for reqwest::RequestBuilder {
+    fn fhir_json<T: SerializeResource>(self, input: &T) -> anyhow::Result<Self> {
+        let rb = self
+            .header(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"))
+            .body(fhirbolt::serde::json::to_vec(input, None)?);
+        Ok(rb)
     }
 }
 
@@ -115,88 +135,72 @@ pub trait PatientExt: Sized {
 }
 
 impl PatientExt for Patient {
-    fn add_id_request(mut self, id: String) -> Self {
-        let request = Identifier::builder()
-            .r#use(IdentifierUse::Secondary)
-            .system(id)
-            .build()
-            .expect("Vailid identifier system");
-        self.identifier.push(Some(request));
+    fn add_id_request(mut self, system: String) -> Self {
+        let request = Identifier {
+            r#use: Some("secondary".into()),
+            system: Some(system.into()),
+            ..Default::default()
+        };
+        self.identifier.push(request);
         self
     }
 
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier> {
         self.identifier
             .iter()
-            .flatten()
-            .find(|x| x.system.as_deref() == Some(id_system))
+            .find(|x| x.system.as_ref().and_then(|v| v.value.as_deref()) == Some(id_system))
     }
 
     fn get_identifier_mut(&mut self, id_system: &str) -> Option<&mut Identifier> {
         self.identifier
             .iter_mut()
-            .flatten()
-            .find(|x| x.system.as_deref() == Some(id_system))
+            .find(|x| x.system.as_ref().and_then(|v| v.value.as_deref()) == Some(id_system))
     }
 
     fn pseudonymize(self) -> axum::response::Result<Self> {
-        let Some(exchange_identifier) = self
-            .identifier
-            .iter()
-            .find(|x| {
-                x.as_ref().is_some_and(|y| y.system.as_deref() == Some(&CONFIG.exchange_id_system))
-            }) else {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    format!("Request did not contain identifier of system {}", &CONFIG.exchange_id_system)
-                ).into());
-            };
-        let pseudonymized_patient = Patient::builder()
-            .identifier(vec![exchange_identifier.clone()])
-            .build()
-            .map_err(|err| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unable to create pseudonymized patient object {}", err),
-                )
-            })?;
+        let Some(exchange_identifier) = self.get_identifier(&CONFIG.exchange_id_system) else {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Request did not contain identifier of system {}", &CONFIG.exchange_id_system)
+            ).into());
+        };
+        let pseudonymized_patient = Patient {
+            identifier: vec![exchange_identifier.clone()],
+            ..Default::default()
+        };
         Ok(pseudonymized_patient)
     }
 }
 
 impl Into<Bundle> for DataRequestPayload {
     fn into(self) -> Bundle {
-        let patient_entry = BundleEntry::builder()
-            .resource(Resource::from(self.patient))
-            .request(
-                BundleEntryRequest::builder()
-                    .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
-                    .url(String::from("/Patient"))
-                    .build()
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
+        let patient_entry = BundleEntry {
+            resource: Some(Resource::Patient(self.patient.into())),
+            request: Some(BundleEntryRequest {
+                method: Code::from("POST"),
+                url: Uri::from("/Patient"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
 
         let consent_entry = self.consent.map(|c| {
-            BundleEntry::builder()
-                .resource(Resource::from(c))
-                .request(
-                    BundleEntryRequest::builder()
-                        .method(fhir_sdk::r4b::codes::HTTPVerb::Post)
-                        .url(String::from("/Consent"))
-                        .build()
-                        .unwrap(),
-                )
-                .build()
-                .unwrap()
+            BundleEntry {
+                resource: Some(Resource::Consent(c.into())),
+                request: Some(BundleEntryRequest {
+                    method: Code::from("POST"),
+                    url: Uri::from("/Consent"),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }
         });
 
-        Bundle::builder()
-            .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
-            .entry(vec![Some(patient_entry), consent_entry])
-            .build()
-            .unwrap()
+        Bundle {
+            r#type: "transaction".into(),
+            entry: consent_entry.into_iter().chain(std::iter::once(patient_entry)).rev().collect(),
+            ..Default::default()
+        }
     }
 }
 
@@ -204,28 +208,102 @@ pub trait ParameterExt {
     fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter>;
 }
 
-impl ParameterExt for Vec<Option<ParametersParameter>> {
+impl ParameterExt for Vec<ParametersParameter> {
     fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter> {
-        self.iter().flatten().find(|p| p.name == name)
+        self.iter().find(|p| p.name.value.as_deref() == Some(name))
+    }
+}
+
+pub mod fhir_json {
+    use fhirbolt::serde::{DeserializeResource, SerializeResource };
+    use serde::{de::DeserializeSeed, Deserializer, Serialize, Serializer};
+
+    
+    pub fn serialize<T: SerializeResource, S: Serializer>(input: &T, ser: S) -> Result<S::Ok, S::Error> {
+        T::serialization_context(input, Default::default(), unsafe {
+            std::mem::transmute(0_u8)
+        })
+            .serialize(ser)
+    }
+
+    pub fn deserialize<'de, T: DeserializeResource<'de>, D: Deserializer<'de>>(deser: D) -> Result<T, D::Error> {
+        T::deserialization_context(Default::default(), unsafe {
+            std::mem::transmute(0_u8)
+        })
+            .deserialize(deser)
+    }
+
+    pub mod option {
+        use serde::de::Visitor;
+
+        use super::*;
+
+        pub fn serialize<T: SerializeResource, S: Serializer>(input: &Option<T>, ser: S) -> Result<S::Ok, S::Error> {
+            match input {
+                Some(value) => super::serialize(value, ser),
+                None => ser.serialize_none(),
+            }
+        }
+
+        pub fn deserialize<'de, T: DeserializeResource<'de>, D: Deserializer<'de>>(deser: D) -> Result<Option<T>, D::Error> {
+            struct OptionVisitor<'de, T: DeserializeResource<'de>> {
+                context: T::Context,
+            }
+            impl<'de, T: DeserializeResource<'de>> Visitor<'de> for OptionVisitor<'de, T> {
+                type Value = Option<T>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("an optional FHIR resource")
+                }
+
+                fn visit_none<E>(self) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    Ok(None)
+                }
+
+                fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                where
+                    D: Deserializer<'de>,
+                {
+                    self.context.deserialize(deserializer).map(Some)
+                }
+            }
+            deser.deserialize_option(OptionVisitor {
+                context: T::deserialization_context(Default::default(), unsafe {
+                    std::mem::transmute(0_u8)
+                }),
+            })
+        }
+
+        // #[test]
+        // fn deser_fhir_option() -> anyhow::Result<()> {
+        //     use fhirbolt::model::r4b::types::String;
+        //     #[derive(serde::Deserialize)]
+        //     struct TestOption {
+        //         #[serde(with = "option")]
+        //         value: Option<String>,
+        //     }
+        //     let a: TestOption = serde_json::from_str(r#"{"value": "test"}"#)?;
+        //     Ok(())
+        // }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::fhir::PatientExt;
-    use fhir_sdk::r4b::{codes::IdentifierUse, resources::Patient};
+    use super::*;
 
     #[test]
     fn add_id_request() {
-        let mut patient = Patient::builder().build().unwrap();
+        let mut patient = Patient::default();
         patient = patient.add_id_request("SOME_SYSTEM".to_string());
-        let identifier = patient.identifier[0]
-            .as_ref()
-            .expect("Add id request didn't add an identifier to empty patient");
+        let identifier = &patient.identifier[0];
         // expect a new identifier with same system as requested
-        assert_eq!(identifier.system, Some("SOME_SYSTEM".to_string()));
+        assert_eq!(identifier.system, Some("SOME_SYSTEM".into()));
         // expect the new identifier to have secondary use
-        assert_eq!(identifier.r#use, Some(IdentifierUse::Secondary));
+        assert_eq!(identifier.r#use, Some("secondary".into()));
         // expect the new identifier to not have a value
         assert_eq!(identifier.value, None);
     }

@@ -1,6 +1,6 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
+use fhirbolt::model::r4b::{resources::{Consent, Patient}, types::Reference, Resource};
 use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
@@ -32,7 +32,9 @@ pub struct DataRequest {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DataRequestPayload {
+    #[serde(with = "crate::fhir::fhir_json")]
     pub patient: Patient,
+    #[serde(with = "crate::fhir::fhir_json::option")]
     pub consent: Option<Consent>
 }
 
@@ -56,7 +58,7 @@ pub async fn create_data_request(
         }
         trace!("TTP returned this consent for Patient {:?}", consent);
 
-        project_identifier = patient.get_identifier(&ttp.project_id_system).and_then(|i| i.value.clone());
+        project_identifier = patient.get_identifier(&ttp.project_id_system).and_then(|i| i.value.as_ref()?.value.clone());
     }
 
     // ensure that we have at least one identifier with which we can link
@@ -66,7 +68,7 @@ pub async fn create_data_request(
         );
     };
 
-    let Some(ref exchange_identifier) = exchange_identifier.value else {
+    let Some(exchange_identifier) = exchange_identifier.value.and_then(|v| v.value) else {
         return Err(
             (StatusCode::BAD_REQUEST, format!("No valid value for identifier {}", &CONFIG.exchange_id_system)).into()
         )
@@ -85,7 +87,7 @@ pub async fn create_data_request(
         id: data_request_id,
         status: RequestStatus::Created,
         message: Some(String::from("Data Request created!")),
-        exchange_id: exchange_identifier.to_string(),
+        exchange_id: exchange_identifier,
         project_id: project_identifier
     };
 
@@ -143,11 +145,14 @@ fn link_patient_consent(mut consent: Consent, patient: &Patient) -> Result<Conse
     let Some(exchange_identifier) = exchange_identifier else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
     };
-    consent.patient = Some(Reference::builder().identifier(exchange_identifier.clone()).build().expect("TODO: Handle this error"));
+    consent.patient = Some(Reference {
+        identifier: Some(exchange_identifier.clone().into()),
+        ..Default::default()
+    }.into());
     Ok(consent)
 }
 
-pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<Result<ResourceType, LinkageError>>>, database_pool: &Pool<Sqlite>) -> sqlx::Result<()> {
+pub async fn update_data_request(bundle_identifier: &str, linkage_results: Option<Vec<Result<std::mem::Discriminant<Resource>, LinkageError>>>, database_pool: &Pool<Sqlite>) -> sqlx::Result<()> {
     let Some(linkage_results) = linkage_results else {
         let message_success_without_linkage = format!("Transferred data from input to output FHIR server without linkage.");
         let _ = sqlx::query!(
@@ -157,7 +162,7 @@ pub async fn update_data_request(bundle_identifier: &str, linkage_results: Optio
         return Ok(());
     };
     let result_summary = linkage_results.iter().map(|res| match res {
-        Ok(rt) => format!("{rt}()"),
+        Ok(rt) => format!("{rt:?}()"),
         Err(error) => format!("{error}"),
     }).collect::<Vec<String>>().join(",");
     debug!("{}", result_summary);

@@ -4,7 +4,7 @@ use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
 use config::Config;
 use fhir::FhirServer;
-use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
+use fhirbolt::model::r4b::{resources::Bundle, Resource};
 use once_cell::sync::Lazy;
 use requests::update_data_request;
 use sqlx::{Pool, Sqlite, SqlitePool};
@@ -121,7 +121,7 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
     if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
-        for entry in new_data.entry.iter_mut().flatten() {
+        for entry in new_data.entry.iter_mut() {
             let Some(resource) = &mut entry.resource else {
                 error!("Received invalid bundle for data request");
                 continue;
@@ -142,12 +142,12 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 continue;
             };
 
-            if bundle_id_system != "DATAREQUEST_ID" {
+            if bundle_id_system.value.as_deref() != Some("DATAREQUEST_ID") {
                 error!("Bundle identifier has invalid system. Please provide an identifier with system \"DATAREQUEST_ID\"");
                 continue;
             };
 
-            let Some(ref bundle_id_value) = bundle_id.value else {
+            let Some(ref bundle_id_value) = bundle_id.value.and_then(|s| s.value) else {
                 error!("Bundle identifier has no value. Link to data request not possible");
                 continue;
             };
@@ -197,57 +197,57 @@ enum LinkageError {
     #[error("entry in response did not contain a resource.")]
     EntryWithoutResource,
     #[error("The resource provided is of unknown type.")]
-    UnknownResource(ResourceType),
+    UnknownResource,
     #[error("The provided resource didn't contain a reference.")]
-    NoReference(ResourceType),
+    NoReference,
     #[error("Can't link resource due to missing identifier")]
-    MissingIdentifier(ResourceType),
+    MissingIdentifier,
     #[error("DataRequest didn't have identifier value for project id stored")]
-    MissingIdentifierValue(ResourceType),
+    MissingIdentifierValue,
     #[error("Identifier for linkage didn't contain a system")]
-    IdentifierWithoutSystem(ResourceType),
+    IdentifierWithoutSystem,
     #[error("Identifier for linkage was not of configured type")]
-    WrongIdentifierType(ResourceType),
-    #[error("{0}: Unable to link identifier to any data request")]
-    IdentifierNotLinkable(ResourceType)
+    WrongIdentifierType,
+    #[error("Unable to link identifier to any data request")]
+    IdentifierNotLinkable
 }
 
-async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &mut Bundle, ttp: &Ttp, database_connection: &Pool<Sqlite>) -> sqlx::Result<Vec<Result<ResourceType, LinkageError>>> {
-    new_data.entry.iter_mut().flatten().map(|entry| {
+async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &mut Bundle, ttp: &Ttp, database_connection: &Pool<Sqlite>) -> sqlx::Result<Vec<Result<std::mem::Discriminant<Resource>, LinkageError>>> {
+    new_data.entry.iter_mut().map(|entry| {
         let Some(resource) = &mut entry.resource else {
             return Err(LinkageError::EntryWithoutResource)
         };
 
-        let rt = resource.resource_type();
+        let rt = std::mem::discriminant(resource);
         let identifier = match resource {
             Resource::Patient(patient) => patient.get_identifier_mut(&CONFIG.exchange_id_system),
             Resource::Consent(consent) => match consent.patient.as_mut() {
-                Some(patient) => patient.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                Some(patient) => patient.identifier.as_deref_mut(),
+                None => return Err(LinkageError::NoReference)
             },
-            Resource::Condition(condition) => condition.subject.identifier.as_mut(),
-            Resource::Procedure(procedure) => procedure.subject.identifier.as_mut(),
+            Resource::Condition(condition) => condition.subject.identifier.as_deref_mut(),
+            Resource::Procedure(procedure) => procedure.subject.identifier.as_deref_mut(),
             Resource::Encounter(encounter) => match encounter.subject.as_mut() {
-                Some(subject) => subject.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                Some(subject) => subject.identifier.as_deref_mut(),
+                None => return Err(LinkageError::NoReference)
             },
             Resource::Observation(observation) => match observation.subject.as_mut() {
-                Some(subject) => subject.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                Some(subject) => subject.identifier.as_deref_mut(),
+                None => return Err(LinkageError::NoReference)
             },
-            _ => return Err(LinkageError::UnknownResource(rt))
+            _ => return Err(LinkageError::UnknownResource)
         };
 
         let Some(identifier) = identifier else {
-            return Err(LinkageError::MissingIdentifier(rt))
+            return Err(LinkageError::MissingIdentifier)
         };
 
         let Some(system) = &mut identifier.system else {
-            return Err(LinkageError::IdentifierWithoutSystem(rt))
+            return Err(LinkageError::IdentifierWithoutSystem)
         };
 
-        if system != &CONFIG.exchange_id_system {
-            Err(LinkageError::WrongIdentifierType(rt))
+        if system.value.as_deref() != Some(&CONFIG.exchange_id_system) {
+            Err(LinkageError::WrongIdentifierType)
         } else {
             Ok((identifier, rt))
         }
@@ -256,19 +256,19 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
             Ok(items) => items,
             Err(e) => return Ok(Err(e)),
         };
-        ident.system = Some(ttp.project_id_system.clone());
+        ident.system = Some(ttp.project_id_system.clone().into());
         let result = sqlx::query!(
             "SELECT project_id FROM data_requests WHERE id = $1",
             data_request_identifier
         ).fetch_optional(database_connection).await?;
         if let Some(patient_identifier) = result {
             let Some(project_id) = patient_identifier.project_id else {
-                return Ok(Err(LinkageError::MissingIdentifierValue(rt)));
+                return Ok(Err(LinkageError::MissingIdentifierValue));
             };
-            ident.value = Some(project_id);
+            ident.value = Some(project_id.into());
             Ok(Ok(rt))
         } else {
-            Ok(Err(LinkageError::IdentifierNotLinkable(rt)))
+            Ok(Err(LinkageError::IdentifierNotLinkable))
         }
     }).collect::<TryJoinAll<_>>().await
 }
@@ -277,11 +277,11 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
 mod tests {
     use core::time;
 
-    use fhir_sdk::r4b::resources::{Bundle, Resource};
+    use super::*;
     use pretty_assertions::assert_eq;
     use reqwest::StatusCode;
 
-    use crate::requests::DataRequest;
+    use crate::{fhir::{FhirRequestExt, FhirResponseExt}, requests::DataRequest};
 
     async fn post_data_request() -> DataRequest {
         let bytes = include_bytes!("../docs/examples/data_request.json");
@@ -318,16 +318,17 @@ mod tests {
         // prepare proper response by external site
         let bytes = include_bytes!("../docs/examples/example_input_data.json");
         let json_string = String::from_utf8_lossy(bytes);
-        let json = serde_json::from_str::<Bundle>(
+        let json = fhirbolt::serde::json::from_str::<Bundle>(
             &json_string
                 .replace("<<data_request_id>>", &format!("{}", data_request.id.clone()))
-                .replace("<<session_id>>", &format!("{}", data_request.exchange_id))
+                .replace("<<session_id>>", &format!("{}", data_request.exchange_id)),
+            None
         ).unwrap();
 
         // deliver data from external site
         reqwest::Client::new()
             .post("http://localhost:8086/fhir/Bundle")
-            .json(&json)
+            .fhir_json(&json).unwrap()
             .header("Content-Type", "application/fhir+json")
             .send()
             .await
@@ -340,20 +341,19 @@ mod tests {
             .get("http://localhost:8095/fhir/Procedure")
             .send()
             .await.unwrap()
-            .json::<Bundle>()
+            .fhir_json::<Bundle>()
             .await.unwrap();
 
         assert!(!procedure_response.entry.is_empty());
-        for entry in procedure_response.entry.iter() {
-            assert_ne!(entry.is_none(), true);
-            let ref procedure = match entry.clone().unwrap().resource.unwrap() {
+        for entry in procedure_response.entry {
+            let procedure = match entry.resource.unwrap() {
                 Resource::Procedure(procedure) => procedure,
                 _ => continue,
             };
             // ensure identifier was changed to the project id
-            let identifier = procedure.subject.identifier.clone().unwrap();
-            assert_eq!(identifier.system, Some(format!("PROJECT_1_ID")));
-            assert_ne!(identifier.value.as_ref(), Some(&data_request.exchange_id));
+            let identifier = procedure.subject.identifier.unwrap();
+            assert_eq!(identifier.system.unwrap().value, Some(format!("PROJECT_1_ID")));
+            assert_ne!(identifier.value.unwrap().value.as_ref(), Some(&data_request.exchange_id));
         };
 
 
@@ -361,20 +361,19 @@ mod tests {
             .get("http://localhost:8095/fhir/Condition")
             .send()
             .await.unwrap()
-            .json::<Bundle>()
+            .fhir_json::<Bundle>()
             .await.unwrap();
 
         assert!(!condition_response.entry.is_empty());
-        for entry in condition_response.entry.iter() {
-            assert_ne!(entry.is_none(), true);
-            let ref condition = match entry.clone().unwrap().resource.unwrap() {
+        for entry in condition_response.entry {
+            let condition = match entry.resource.unwrap() {
                 Resource::Condition(condition) => condition,
                 _ => continue,
             };
             // ensure identifier was changed to the project id
-            let identifier = condition.subject.identifier.clone().unwrap();
-            assert_eq!(identifier.system, Some(format!("PROJECT_1_ID")));
-            assert_ne!(identifier.value.as_ref(), Some(&data_request.exchange_id));
+            let identifier = condition.subject.identifier.unwrap();
+            assert_eq!(identifier.system.unwrap().value, Some(format!("PROJECT_1_ID")));
+            assert_ne!(identifier.value.unwrap().value.as_ref(), Some(&data_request.exchange_id));
         };
     }
 }
