@@ -164,7 +164,7 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 Err(error) => error!("Received the following error: {error:#}"),
             };
 
-            update_data_request(&entry_bundle.id.as_ref().unwrap(), linkage_results, &database_pool).await.unwrap();
+            update_data_request(bundle_id_value, linkage_results, &database_pool).await.unwrap();
 
         }
 
