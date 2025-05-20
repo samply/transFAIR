@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 use axum::response::IntoResponse;
 use clap::{FromArgMatches, Parser, ValueEnum};
-use fhir_sdk::r4b::resources::{Consent, Patient};
+use fhirbolt::model::r4b::resources::{Consent, Patient};
 use reqwest::{Client, StatusCode, Url};
 use thiserror::Error;
 

@@ -1,6 +1,6 @@
 use axum::{extract::{Path, State}, Json};
 
-use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
+use fhirbolt::model::r4b::{resources::{Consent, Patient}, types::Reference};
 use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};

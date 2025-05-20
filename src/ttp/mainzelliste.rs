@@ -1,11 +1,11 @@
 //! Client implementation for Mainzelliste TTP
 use clap::Parser;
-use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
+use fhirbolt::model::r4b::resources::{Consent, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{fhir::PatientExt, ttp_bail, CONFIG};
+use crate::{fhir::{FhirRequestExt, FhirResponseExt, PatientExt}, ttp_bail, CONFIG};
 
 use super::TtpError;
 
@@ -115,7 +115,7 @@ impl MlConfig {
             ttp_bail!("Error requesting project pseudonym from Mainzelliste: {err:#}\n Got response: {}", response.text().await?);
         }
         let patient = response
-            .json::<Patient>()
+            .fhir_json::<Patient>()
             .await?;
 
         Ok(patient)
@@ -196,7 +196,8 @@ impl MlConfig {
             .post(consent_endpoint)
             .header("Authorization", format!("MainzellisteToken {}", token.id))
             .header("Content-Type", "application/fhir+json")
-            .json(&consent_with_identifiers)
+            .fhir_json(&consent_with_identifiers)
+            .unwrap()
             .send()
             .await
             .map_err(|err| {

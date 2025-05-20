@@ -4,7 +4,7 @@ use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
 use config::Config;
 use fhir::FhirServer;
-use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
+use fhirbolt::model::r4b::{resources::Bundle, Resource};
 use once_cell::sync::Lazy;
 use requests::update_data_request;
 use sqlx::{Pool, Sqlite, SqlitePool};
@@ -121,7 +121,7 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
     if new_data.entry.is_empty() {
         debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
     } else {
-        for entry in new_data.entry.iter_mut().flatten() {
+        for entry in new_data.entry.iter_mut() {
             let Some(resource) = &mut entry.resource else {
                 error!("Received invalid bundle for data request");
                 continue;
@@ -142,12 +142,12 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 continue;
             };
 
-            if bundle_id_system != "DATAREQUEST_ID" {
+            if bundle_id_system.value.as_deref() != Some("DATAREQUEST_ID") {
                 error!("Bundle identifier has invalid system. Please provide an identifier with system \"DATAREQUEST_ID\"");
                 continue;
             };
 
-            let Some(ref bundle_id_value) = bundle_id.value else {
+            let Some(ref bundle_id_value) = bundle_id.value.and_then(|s| s.value) else {
                 error!("Bundle identifier has no value. Link to data request not possible");
                 continue;
             };
@@ -197,57 +197,56 @@ enum LinkageError {
     #[error("entry in response did not contain a resource.")]
     EntryWithoutResource,
     #[error("The resource provided is of unknown type.")]
-    UnknownResource(ResourceType),
+    UnknownResource,
     #[error("The provided resource didn't contain a reference.")]
-    NoReference(ResourceType),
+    NoReference,
     #[error("Can't link resource due to missing identifier")]
-    MissingIdentifier(ResourceType),
+    MissingIdentifier,
     #[error("DataRequest didn't have identifier value for project id stored")]
-    MissingIdentifierValue(ResourceType),
+    MissingIdentifierValue,
     #[error("Identifier for linkage didn't contain a system")]
-    IdentifierWithoutSystem(ResourceType),
+    IdentifierWithoutSystem,
     #[error("Identifier for linkage was not of configured type")]
-    WrongIdentifierType(ResourceType),
-    #[error("{0}: Unable to link identifier to any data request")]
-    IdentifierNotLinkable(ResourceType)
+    WrongIdentifierType,
+    #[error("Unable to link identifier to any data request")]
+    IdentifierNotLinkable
 }
 
 async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &mut Bundle, ttp: &Ttp, database_connection: &Pool<Sqlite>) -> sqlx::Result<Vec<Result<ResourceType, LinkageError>>> {
-    new_data.entry.iter_mut().flatten().map(|entry| {
+    new_data.entry.iter_mut().map(|entry| {
         let Some(resource) = &mut entry.resource else {
             return Err(LinkageError::EntryWithoutResource)
         };
 
-        let rt = resource.resource_type();
         let identifier = match resource {
             Resource::Patient(patient) => patient.get_identifier_mut(&CONFIG.exchange_id_system),
             Resource::Consent(consent) => match consent.patient.as_mut() {
                 Some(patient) => patient.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                None => return Err(LinkageError::NoReference)
             },
             Resource::Condition(condition) => condition.subject.identifier.as_mut(),
             Resource::Procedure(procedure) => procedure.subject.identifier.as_mut(),
             Resource::Encounter(encounter) => match encounter.subject.as_mut() {
                 Some(subject) => subject.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                None => return Err(LinkageError::NoReference)
             },
             Resource::Observation(observation) => match observation.subject.as_mut() {
                 Some(subject) => subject.identifier.as_mut(),
-                None => return Err(LinkageError::NoReference(rt))
+                None => return Err(LinkageError::NoReference)
             },
-            _ => return Err(LinkageError::UnknownResource(rt))
+            _ => return Err(LinkageError::UnknownResource)
         };
 
         let Some(identifier) = identifier else {
-            return Err(LinkageError::MissingIdentifier(rt))
+            return Err(LinkageError::MissingIdentifier)
         };
 
         let Some(system) = &mut identifier.system else {
-            return Err(LinkageError::IdentifierWithoutSystem(rt))
+            return Err(LinkageError::IdentifierWithoutSystem)
         };
 
         if system != &CONFIG.exchange_id_system {
-            Err(LinkageError::WrongIdentifierType(rt))
+            Err(LinkageError::WrongIdentifierType)
         } else {
             Ok((identifier, rt))
         }
@@ -263,12 +262,12 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
         ).fetch_optional(database_connection).await?;
         if let Some(patient_identifier) = result {
             let Some(project_id) = patient_identifier.project_id else {
-                return Ok(Err(LinkageError::MissingIdentifierValue(rt)));
+                return Ok(Err(LinkageError::MissingIdentifierValue));
             };
             ident.value = Some(project_id);
-            Ok(Ok(rt))
+            Ok(Ok())
         } else {
-            Ok(Err(LinkageError::IdentifierNotLinkable(rt)))
+            Ok(Err(LinkageError::IdentifierNotLinkable))
         }
     }).collect::<TryJoinAll<_>>().await
 }
