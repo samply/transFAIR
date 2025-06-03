@@ -79,7 +79,10 @@ pub async fn create_data_request(
     let data_request_id = REQUEST_SERVER.post_data_request(DataRequestPayload {
         patient,
         consent: linked_consent
-    }).await?;
+    }).await.map_err(|e| {
+        error!("{e:#}");
+        (StatusCode::BAD_GATEWAY, "Unable to post data request to request fhir server.")
+    })?;
 
     let data_request = DataRequest {
         id: data_request_id,

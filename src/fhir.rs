@@ -6,7 +6,7 @@ use fhir_sdk::r4b::{
     types::Identifier,
 };
 use reqwest::{header, Client, StatusCode, Url};
-use tracing::{debug, error, warn};
+use tracing::debug;
 
 use crate::{config::{Auth, ClientBuilderExt}, requests::DataRequestPayload, CONFIG};
 
@@ -25,7 +25,7 @@ impl FhirServer {
     pub async fn post_data_request(
         &self,
         payload: DataRequestPayload
-    ) -> Result<String, (StatusCode, &'static str)> {
+    ) -> anyhow::Result<String> {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Posting request for DIC to {}", self.url);
 
@@ -34,42 +34,23 @@ impl FhirServer {
         let response = self.client
             .post(bundle_endpoint)
             .add_auth(&self.auth)
-            .await
-            .unwrap()
+            .await?
             .header(header::CONTENT_TYPE, "application/json+fhir")
             .json(&bundle)
             .send()
-            .await
-            .map_err(|err| {
-                warn!("Unable to connect to fhir server: {}", err);
-                (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "Unable to connect to consent fhir server. Please try later.",
-                )
-            })?;
+            .await?;
 
-        if response.status().is_client_error() || response.status().is_server_error() {
-            error!(
-                "Unable to push request to server: status={}",
-                response.status()
-            );
-            return Err((
-                StatusCode::BAD_GATEWAY,
-                "Unable to create consent in consent server. Please contact your administrator.",
-            ));
+        if let Err(e) = response.error_for_status_ref() {
+            return Err(e).context(format!("Unable to push request to server: {}", response.text().await.unwrap_or_default()));
         };
 
         let bundle = response.json::<Bundle>()
             .await
-            .map_err(|err| {
-                error!("Unable to parse consent returned by fhir server: {}", err);
-                (StatusCode::BAD_GATEWAY, "Unable to parse consent returned by consent server. Please contact your administrator.")
-            })?;
+            .context("Unable to parse bundle returned by fhir server")?;
 
-        Ok(bundle
+        bundle.0
             .id
-            .clone()
-            .expect("Consent Server returned bundle without id."))
+            .ok_or(anyhow::anyhow!("Fhir Server returned bundle without id."))
     }
 
     // get data from fhir server that updated after a specified date
