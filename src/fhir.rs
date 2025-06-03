@@ -192,9 +192,13 @@ impl Into<Bundle> for DataRequestPayload {
                 .unwrap()
         });
 
+        let mut entries = vec![Some(patient_entry)];
+        if let Some(consent) = consent_entry {
+            entries.push(Some(consent));
+        }
         Bundle::builder()
             .r#type(fhir_sdk::r4b::codes::BundleType::Transaction)
-            .entry(vec![Some(patient_entry), consent_entry])
+            .entry(entries)
             .build()
             .unwrap()
     }
