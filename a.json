@@ -1,0 +1,22 @@
+{
+    "type": "transaction",
+    "resourceType": "Bundle",
+    "entry": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "/Patient"
+            },
+            "resource": {
+                "resourceType": "Patient",
+                "identifier": []
+            }
+        },
+        {
+            "request": {
+                "method": "POST",
+                "url": "/Consent"
+            }
+        }
+    ]
+}

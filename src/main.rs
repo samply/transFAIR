@@ -376,4 +376,12 @@ mod tests {
             assert_ne!(identifier.value.unwrap().value.as_ref(), Some(&data_request.exchange_id));
         };
     }
+
+    #[test]
+    fn asfd() -> anyhow::Result<()> {
+        let bytes = include_bytes!("../a.json");
+        let data_request: Bundle = fhirbolt::json::from_slice(bytes, None)?;
+        dbg!(data_request);
+        Ok(())
+    }
 }

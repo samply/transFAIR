@@ -35,7 +35,7 @@ impl FhirServer {
             .await
             .unwrap()
             .header(header::CONTENT_TYPE, "application/json+fhir")
-            .json(&fhirbolt::serde::json::to_vec(&bundle, None).unwrap())
+            .fhir_json(&bundle).unwrap()
             .send()
             .await
             .map_err(|err| {
@@ -60,7 +60,7 @@ impl FhirServer {
         let bundle = response.fhir_json::<Bundle>()
             .await
             .map_err(|err| {
-                error!("Unable to parse consent returned by fhir server: {}", err);
+                error!("Unable to parse consent returned by fhir server: {err:#}");
                 (StatusCode::BAD_GATEWAY, "Unable to parse consent returned by consent server. Please contact your administrator.")
             })?;
 
@@ -110,7 +110,8 @@ pub trait FhirResponseExt {
 
 impl FhirResponseExt for reqwest::Response {
     async fn fhir_json<T: DeserializeResourceOwned>(self) -> anyhow::Result<T> {
-        fhirbolt::serde::json::from_slice(&self.bytes().await?, None).map_err(Into::into)
+        let bytes = self.bytes().await?;
+        fhirbolt::serde::json::from_slice(&bytes, None).with_context(move || String::from_utf8(bytes.to_vec()).unwrap_or_default()).map_err(Into::into)
     }
 }
 

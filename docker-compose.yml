@@ -37,18 +37,18 @@ services:
 
   # This service will normaly be provided by the bridgehead, but could also be just a fhir server hosted by the authority for data transfer
   consent-fhir-server:
-    image: samply/blaze
+    image: samply/blaze:0.34
     ports:
       - 8085:8080
 
   # This service will normaly be provided by the bridgehead, but could also be just a fhir server hosted by the authority for data transfer
   mdat-fhir-server:
-    image: samply/blaze
+    image: samply/blaze:0.34
     ports:
       - 8086:8080
 
   # This service reprents a specific projects database
   project-data-fhir-server:
-    image: samply/blaze
+    image: samply/blaze:0.34
     ports:
       - 8095:8080
