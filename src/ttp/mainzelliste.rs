@@ -1,11 +1,11 @@
 //! Client implementation for Mainzelliste TTP
 use clap::Parser;
-use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
+use fhirbolt::model::r4b::resources::{Consent, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{fhir::PatientExt, ttp_bail, CONFIG};
+use crate::{fhir::{FhirRequestExt, FhirResponseExt, PatientExt}, ttp_bail, CONFIG};
 
 use super::TtpError;
 
@@ -107,7 +107,7 @@ impl MlConfig {
         let response = self.client
             .post(patients_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
-            .json(&patient)
+            .fhir_json(&patient)?
             .send()
             .await?;
 
@@ -115,7 +115,7 @@ impl MlConfig {
             ttp_bail!("Error requesting project pseudonym from Mainzelliste: {err:#}\n Got response: {}", response.text().await?);
         }
         let patient = response
-            .json::<Patient>()
+            .fhir_json::<Patient>()
             .await?;
 
         Ok(patient)
@@ -182,7 +182,7 @@ impl MlConfig {
         // TODO: Needs to be done outside of mainzelliste.rs
         let mut consent_with_identifiers = consent.clone(); 
         // TODO: Mainzelliste currently says the identifier don't have a proper system, maybe need to add the URL?
-        consent_with_identifiers.set_identifier(patient.identifier.clone());
+        consent_with_identifiers.identifier = patient.identifier.clone();
 
         trace!("{:?}", consent_with_identifiers);
 
@@ -196,7 +196,8 @@ impl MlConfig {
             .post(consent_endpoint)
             .header("Authorization", format!("MainzellisteToken {}", token.id))
             .header("Content-Type", "application/fhir+json")
-            .json(&consent_with_identifiers)
+            .fhir_json(&consent_with_identifiers)
+            .unwrap()
             .send()
             .await
             .map_err(|err| {

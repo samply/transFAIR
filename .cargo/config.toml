@@ -1,7 +1,7 @@
 [env]
 # Environment for Routine Connector
-TTP_URL="http://localhost:8081"
-TTP_ML_API_KEY="routine-connector-password"
+TTP_URL="http://localhost:8082"
+TTP_ML_API_KEY="transFAIR-password"
 FHIR_REQUEST_URL="http://localhost:8085"
 # FHIR_REQUEST_CREDENTIALS="user:pw"
 FHIR_INPUT_URL="http://localhost:8086"

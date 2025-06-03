@@ -1,16 +1,22 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
-use fhir_sdk::r4b::resources::{
-    Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
+use fhirbolt::model::r4b::{
+    Resource,
+    resources::{
+        Bundle, Consent, Parameters, ParametersParameter, ParametersParameterValue, Patient,
+        QuestionnaireResponse,
+    },
+    types::{Coding, Identifier},
 };
-use fhir_sdk::r4b::types::{Coding, Identifier};
 use tracing::debug;
 
-use crate::config::ClientBuilderExt;
 use crate::fhir::ParameterExt;
-use crate::{ttp_bail, CONFIG};
+use crate::{CONFIG, ttp_bail};
+use crate::{
+    config::ClientBuilderExt,
+    fhir::{FhirRequestExt, FhirResponseExt},
+};
 
 use super::TtpError;
 
@@ -43,7 +49,8 @@ impl GreifswaldConfig {
     }
 
     pub async fn check_idtype_available(&self, idtype: &str) -> bool {
-        idtype == "https://ths-greifswald.de/fhir/gpas" || idtype.starts_with("https://ths-greifswald.de/fhir/epix/identifier/")
+        idtype == "https://ths-greifswald.de/fhir/gpas"
+            || idtype.starts_with("https://ths-greifswald.de/fhir/epix/identifier/")
     }
 
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Einwilligungsmanagement-Operations-addConsent.html
@@ -53,31 +60,31 @@ impl GreifswaldConfig {
         patient: &Patient,
     ) -> Result<Consent, TtpError> {
         let url = self.url.join("/ttp-fhir/fhir/gics/$addConsent").unwrap();
-        let params = Parameters::builder()
-            .parameter(vec![
-                ParametersParameter::builder()
-                    .name("patient".into())
-                    .resource(patient.clone().into())
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("questionnaireResponse".into())
-                    .resource(
-                        QuestionnaireResponse::builder()
-                            .status(fhir_sdk::r4b::codes::QuestionnaireResponseStatus::Completed)
-                            .build()
-                            .unwrap()
-                            .into(),
-                    )
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("domain".into())
-                    .value(ParametersParameterValue::String(
-                        self.gpas_domain.clone(),
-                    ))
-                    .build()
-                    .ok(),
+        let params = Parameters {
+            parameter: vec![
+                ParametersParameter {
+                    name: "patient".into(),
+                    resource: Some(Resource::Patient(Box::new(patient.clone()))),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "questionnaireResponse".into(),
+                    resource: Some(Resource::QuestionnaireResponse(
+                        QuestionnaireResponse {
+                            status: "completed".into(),
+                            ..Default::default()
+                        }
+                        .into(),
+                    )),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "domain".into(),
+                    value: Some(ParametersParameterValue::String(
+                        self.gpas_domain.clone().into(),
+                    )),
+                    ..Default::default()
+                },
                 // ParametersParameter::builder()
                 //     .name("documentReference".into())
                 //     .resource(
@@ -92,28 +99,27 @@ impl GreifswaldConfig {
                 //     )
                 //     .build()
                 //     .ok(),
-            ])
-            .build()
-            .unwrap();
+            ],
+            ..Default::default()
+        };
         let res = self
             .client
             .post(url)
-            .json(&params)
+            .fhir_json(&params)?
             .add_auth(&self.ttp_auth)
             .await?
             .send()
             .await?;
         if let Err(e) = res.error_for_status_ref() {
-            ttp_bail!("Error while sending consent: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+            ttp_bail!(
+                "Error while sending consent: {e:#}\nBody was: {}",
+                res.text().await.unwrap_or_else(|e| e.to_string())
+            );
         }
-        let bundle = res
-            .json::<Bundle>()
-            .await?;
+        let bundle = res.fhir_json::<Bundle>().await?;
         let Resource::Consent(c) = bundle
-            .0
             .entry
             .iter()
-            .flatten()
             .next()
             .unwrap()
             .resource
@@ -123,7 +129,7 @@ impl GreifswaldConfig {
         else {
             ttp_bail!("Bundle did not contain a consent resoucrce: {bundle:#?}")
         };
-        Ok(c)
+        Ok(*c)
     }
 
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
@@ -132,66 +138,68 @@ impl GreifswaldConfig {
         mut patient: Patient,
     ) -> Result<Patient, TtpError> {
         let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
-        let params = Parameters::builder()
-            .parameter(vec![
-                ParametersParameter::builder()
-                    .name("source".into())
-                    .value(ParametersParameterValue::String(String::from(
-                        self.source.clone(),
-                    )))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("domain".into())
-                    .value(ParametersParameterValue::String(
-                        self.epix_domain.clone(),
-                    ))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("forceReferenceUpdate".into())
-                    .value(ParametersParameterValue::Boolean(true))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("saveAction".into())
-                    .value(
-                        Coding::builder()
-                            .system(
+        let params = Parameters {
+            parameter: vec![
+                ParametersParameter {
+                    name: "source".into(),
+                    value: Some(ParametersParameterValue::String(self.source.clone().into())),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "domain".into(),
+                    value: Some(ParametersParameterValue::String(
+                        self.epix_domain.clone().into(),
+                    )),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "forceReferenceUpdate".into(),
+                    value: Some(ParametersParameterValue::Boolean(true.into())),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "saveAction".into(),
+                    value: Some(ParametersParameterValue::Coding(
+                        Coding {
+                            system: Some(
                                 "https://ths-greifswald.de/fhir/CodeSystem/epix/SaveAction".into(),
-                            )
-                            .code("DONT_SAVE_ON_PERFECT_MATCH".into())
-                            .build()
-                            .map(ParametersParameterValue::Coding)
-                            .unwrap(),
-                    )
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("identity".into())
-                    .resource(Resource::Patient({
-                        patient.identifier = Vec::new();
-                        patient
-                    }))
-                    .build()
-                    .ok(),
-            ])
-            .build()
-            .unwrap();
+                            ),
+                            code: Some("DONT_SAVE_ON_PERFECT_MATCH".into()),
+                            ..Default::default()
+                        }
+                        .into(),
+                    )),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "identity".into(),
+                    resource: Some(Resource::Patient(
+                        {
+                            patient.identifier = Vec::new();
+                            patient
+                        }
+                        .into(),
+                    )),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
         let res = self
             .client
             .post(url)
-            .json(&params)
+            .fhir_json(&params)?
             .add_auth(&self.ttp_auth)
             .await?
             .send()
             .await?;
         if let Err(e) = res.error_for_status_ref() {
-            ttp_bail!("Error while matching patient: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+            ttp_bail!(
+                "Error while matching patient: {e:#}\nBody was: {}",
+                res.text().await.unwrap_or_else(|e| e.to_string())
+            );
         }
-        let parameters = res
-            .json::<Parameters>()
-            .await?;
+        let parameters = res.fhir_json::<Parameters>().await?;
         debug!(?parameters);
         let Some(result) = parameters.parameter.get_param_by_name("matchResult") else {
             ttp_bail!("Response parameters did not contain a match result")
@@ -201,7 +209,11 @@ impl GreifswaldConfig {
         else {
             ttp_bail!("Response did not contain a matchStatus")
         };
-        let Some(status) = c.code.as_ref().and_then(|v| v.parse::<MatchStatus>().ok()) else {
+        let Some(status) = c
+            .code
+            .as_ref()
+            .and_then(|v| v.value.as_ref()?.parse::<MatchStatus>().ok())
+        else {
             ttp_bail!("Failed to parse coding as MatchStatus. Was {c:?}")
         };
         if status == MatchStatus::MatchError {
@@ -214,32 +226,24 @@ impl GreifswaldConfig {
         else {
             ttp_bail!("Matching result did not contain a patient: {result:#?}")
         };
-        let Some(ex_id) = person
-            .identifier
-            .iter()
-            .flatten()
-            .find(|i| {
-                if cfg!(test) {
-                    i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
-                } else {
-                    i.system.as_deref() == Some(&CONFIG.exchange_id_system)
-                }
-            })
-            .and_then(|i| i.value.as_deref())
-        else {
+        let Some(ex_id) = person.identifier.iter().find_map(|i| {
+            if cfg!(test) {
+                i.system.as_ref()?.value.as_ref()?
+                    == "https://ths-greifswald.de/fhir/epix/identifier/MPI"
+            } else {
+                i.system.as_ref()?.value.as_ref()? == &CONFIG.exchange_id_system
+            }
+            .then_some(i.value.as_ref()?.value.clone()?)
+        }) else {
             ttp_bail!("Patient returned by matching did not contain a mpi identifier")
         };
-        let mut pb = Patient::builder();
-        if let Some(ref id) = person.id {
-            pb = pb.id(id.clone());
-        }
         let mut idents = person.identifier.clone();
-        idents.push(Some(self.request_pseudonym(ex_id).await?));
-        let patient = pb
-            .identifier(idents)
-            .build()
-            .unwrap();
-        Ok(patient)
+        idents.push(self.request_pseudonym(&ex_id).await?);
+        Ok(Patient {
+            id: person.id.clone(),
+            identifier: idents,
+            ..Default::default()
+        })
     }
 
     async fn request_pseudonym(&self, ident: &str) -> Result<Identifier, TtpError> {
@@ -247,37 +251,38 @@ impl GreifswaldConfig {
             .url
             .join("/ttp-fhir/fhir/gpas/$pseudonymizeAllowCreate")
             .unwrap();
-        let params = Parameters::builder()
-            .parameter(vec![
-                ParametersParameter::builder()
-                    .name("target".into())
-                    .value(ParametersParameterValue::String(
-                        self.gpas_domain.clone(),
-                    ))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("original".into())
-                    .value(ParametersParameterValue::String(ident.into()))
-                    .build()
-                    .ok(),
-            ])
-            .build()
-            .unwrap();
+        let params = Parameters {
+            parameter: vec![
+                ParametersParameter {
+                    name: "target".into(),
+                    value: Some(ParametersParameterValue::String(
+                        self.gpas_domain.clone().into(),
+                    )),
+                    ..Default::default()
+                },
+                ParametersParameter {
+                    name: "original".into(),
+                    value: Some(ParametersParameterValue::String(ident.into())),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
         let res = self
             .client
             .post(url)
-            .json(&params)
+            .fhir_json(&params)?
             .add_auth(&self.ttp_auth)
             .await?
             .send()
             .await?;
         if let Err(e) = res.error_for_status_ref() {
-            ttp_bail!("Error requesting pseudonym: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
+            ttp_bail!(
+                "Error requesting pseudonym: {e:#}\nBody was: {}",
+                res.text().await.unwrap_or_else(|e| e.to_string())
+            );
         }
-        let parameters = res
-            .json::<Parameters>()
-            .await?;
+        let parameters = res.fhir_json::<Parameters>().await?;
         debug!(?parameters, "Got pseudonym response");
         let Some(pseudonym) = parameters.parameter.get_param_by_name("pseudonym") else {
             ttp_bail!("Response parameters did not contain a pseudonym")
@@ -292,7 +297,7 @@ impl GreifswaldConfig {
         let ParametersParameterValue::Identifier(pseudonym_ident) = pseudonym_value else {
             ttp_bail!("Pseudonym was not an identifier")
         };
-        Ok(pseudonym_ident.clone())
+        Ok((**pseudonym_ident).clone())
     }
 }
 
@@ -332,13 +337,7 @@ mod tests {
     use crate::{config::Auth, ttp::TtpInner};
 
     use super::*;
-    use fhir_sdk::{
-        r4b::{
-            codes::ConsentState,
-            types::{Address, CodeableConcept, HumanName},
-        },
-        time::Date,
-    };
+    use fhirbolt::model::r4b::types::{Address, HumanName};
     use reqwest::Client;
 
     #[tokio::test]
@@ -356,12 +355,10 @@ mod tests {
             gpas_domain: "MII".into(),
         };
         ttp.document_patient_consent(
-            Consent::builder()
-                .status(ConsentState::Active)
-                .scope(CodeableConcept::builder().build().unwrap())
-                .category(vec![])
-                .build()
-                .unwrap(),
+            Consent {
+                status: "active".into(),
+                ..Default::default()
+            },
             &fake_patient(),
         )
         .await
@@ -381,33 +378,25 @@ mod tests {
             epix_domain: "Demo".into(),
             gpas_domain: "Transferstelle A".into(),
         };
-        dbg!(ttp.request_project_pseudonym(fake_patient())
-            .await
-            .unwrap());
+        dbg!(ttp.request_project_pseudonym(fake_patient()).await.unwrap());
     }
 
     fn fake_patient() -> Patient {
-        Patient::builder()
-            .name(vec![Some(
-                HumanName::builder()
-                    .given(vec![Some("Max".into())])
-                    .family("Mustermannerasdf".into())
-                    .build()
-                    .unwrap(),
-            )])
-            .gender(fhir_sdk::r4b::codes::AdministrativeGender::Male)
-            .birth_date(fhir_sdk::Date::Date(
-                Date::from_calendar_date(2015, fhir_sdk::time::Month::April, 1).unwrap(),
-            ))
-            .address(vec![Some(
-                Address::builder()
-                    .city("Speyer".into())
-                    .postal_code("67346".into())
-                    .line(vec![Some("Foostr. 5".into())])
-                    .build()
-                    .unwrap(),
-            )])
-            .build()
-            .unwrap()
+        Patient {
+            name: vec![HumanName {
+                given: vec!["Max".into()],
+                family: Some("Mustermann".into()),
+                ..Default::default()
+            }],
+            gender: Some("male".into()),
+            birth_date: Some("1980-01-01".into()),
+            address: vec![Address {
+                city: Some("Speyer".into()),
+                postal_code: Some("67346".into()),
+                line: vec!["Foostr. 5".into()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
     }
 }
