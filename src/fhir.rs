@@ -2,7 +2,7 @@ use anyhow::Context;
 use chrono::NaiveDateTime;
 use fhir_sdk::r4b::{
     codes::IdentifierUse,
-    resources::{Bundle, BundleEntry, BundleEntryRequest, ParametersParameter, Patient, Resource},
+    resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
     types::Identifier,
 };
 use reqwest::{header, Client, StatusCode, Url};
@@ -182,16 +182,6 @@ impl Into<Bundle> for DataRequestPayload {
             .entry(entries)
             .build()
             .unwrap()
-    }
-}
-
-pub trait ParameterExt {
-    fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter>;
-}
-
-impl ParameterExt for Vec<Option<ParametersParameter>> {
-    fn get_param_by_name(&self, name: &str) -> Option<&ParametersParameter> {
-        self.iter().flatten().find(|p| p.name == name)
     }
 }
 

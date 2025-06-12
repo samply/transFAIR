@@ -1,16 +1,16 @@
+use std::fmt::Display;
 use std::str::FromStr;
 
 use clap::Parser;
+use fhir_sdk::r4b::codes::AdministrativeGender;
 use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
 use fhir_sdk::r4b::resources::{
     Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
 };
-use fhir_sdk::r4b::types::{Coding, Identifier};
-use tracing::debug;
+use fhir_sdk::r4b::types::Identifier;
 
 use crate::config::ClientBuilderExt;
-use crate::fhir::ParameterExt;
-use crate::{ttp_bail, CONFIG};
+use crate::ttp_bail;
 
 use super::TtpError;
 
@@ -129,59 +129,34 @@ impl GreifswaldConfig {
     // https://www.ths-greifswald.de/wp-content/uploads/tools/fhirgw/ig/2024-3-0/ImplementationGuide-markdown-Pseudonymmanagement-Operations-pseudonymize.html
     pub(super) async fn request_project_pseudonym(
         &self,
-        mut patient: Patient,
+        patient: Patient,
     ) -> Result<Patient, TtpError> {
-        let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
-        let params = Parameters::builder()
-            .parameter(vec![
-                ParametersParameter::builder()
-                    .name("source".into())
-                    .value(ParametersParameterValue::String(String::from(
-                        self.source.clone(),
-                    )))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("domain".into())
-                    .value(ParametersParameterValue::String(
-                        self.epix_domain.clone(),
-                    ))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("forceReferenceUpdate".into())
-                    .value(ParametersParameterValue::Boolean(true))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("saveAction".into())
-                    .value(
-                        Coding::builder()
-                            .system(
-                                "https://ths-greifswald.de/fhir/CodeSystem/epix/SaveAction".into(),
-                            )
-                            .code("DONT_SAVE_ON_PERFECT_MATCH".into())
-                            .build()
-                            .map(ParametersParameterValue::Coding)
-                            .unwrap(),
-                    )
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("identity".into())
-                    .resource(Resource::Patient({
-                        patient.identifier = Vec::new();
-                        patient
-                    }))
-                    .build()
-                    .ok(),
-            ])
-            .build()
-            .unwrap();
+        let url = self.url.join("epix/epixService").unwrap();
+        let Self { epix_domain, source, .. } = self;
+        let patient_xml = patient_to_xml(&patient);
+        let soap_body = format!(r#"<?xml version="1.0" encoding="utf-8"?>
+            <soap:Envelope
+                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+                xmlns:ser="http://service.epix.ttp.icmvc.emau.org/">
+            <soap:Header/>
+            <soap:Body>
+                <ser:requestMPIWithConfig>
+                    <domainName>{epix_domain}</domainName>
+                    <identity>
+                        {patient_xml}
+                    </identity>
+                    <sourceName>{source}</sourceName>
+                    <requestConfig>
+                        <forceReferenceUpdate>false</forceReferenceUpdate>
+                        <saveAction>DONT_SAVE_ON_PERFECT_MATCH</saveAction>
+                    </requestConfig>
+                </ser:requestMPIWithConfig>
+            </soap:Body>
+            </soap:Envelope>"#);
         let res = self
             .client
             .post(url)
-            .json(&params)
+            .body(soap_body)
             .add_auth(&self.ttp_auth)
             .await?
             .send()
@@ -189,85 +164,47 @@ impl GreifswaldConfig {
         if let Err(e) = res.error_for_status_ref() {
             ttp_bail!("Error while matching patient: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
         }
-        let parameters = res
-            .json::<Parameters>()
+        let xml = res
+            .text()
             .await?;
-        debug!(?parameters);
-        let Some(result) = parameters.parameter.get_param_by_name("matchResult") else {
-            ttp_bail!("Response parameters did not contain a match result")
+        let Some(mpi) = extract_mpi(&xml) else {
+            ttp_bail!("Failed to get mpi from response: {xml}");
         };
-        let status = result.part.get_param_by_name("matchStatus");
-        let Some(ParametersParameterValue::Coding(c)) = status.and_then(|c| c.value.as_ref())
-        else {
-            ttp_bail!("Response did not contain a matchStatus")
-        };
-        let Some(status) = c.code.as_ref().and_then(|v| v.parse::<MatchStatus>().ok()) else {
-            ttp_bail!("Failed to parse coding as MatchStatus. Was {c:?}")
-        };
-        if status == MatchStatus::MatchError {
-            ttp_bail!("Got a matching error: {result:#?}")
-        }
-        let Some(ParametersParameter {
-            resource: Some(Resource::Person(person)),
-            ..
-        }) = result.part.get_param_by_name("mpiPerson").as_ref()
-        else {
-            ttp_bail!("Matching result did not contain a patient: {result:#?}")
-        };
-        let Some(ex_id) = person
-            .identifier
-            .iter()
-            .flatten()
-            .find(|i| {
-                if cfg!(test) {
-                    i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
-                } else {
-                    i.system.as_deref() == Some(&CONFIG.exchange_id_system)
-                }
-            })
-            .and_then(|i| i.value.as_deref())
-        else {
-            ttp_bail!("Patient returned by matching did not contain a mpi identifier")
-        };
-        let mut pb = Patient::builder();
-        if let Some(ref id) = person.id {
-            pb = pb.id(id.clone());
-        }
-        let mut idents = person.identifier.clone();
-        idents.push(Some(self.request_pseudonym(ex_id).await?));
-        let patient = pb
-            .identifier(idents)
+        let psn = self.request_pseudonym(&mpi).await?;
+        let patient = Patient::builder()
+            .identifier(vec![Some(Identifier::builder()
+                .system(self.project_id_system.clone())
+                .value(psn)
+                .build()
+                .unwrap(),
+        )])
             .build()
             .unwrap();
         Ok(patient)
     }
 
-    async fn request_pseudonym(&self, ident: &str) -> Result<Identifier, TtpError> {
+    async fn request_pseudonym(&self, ident: &str) -> Result<String, TtpError> {
         let url = self
             .url
-            .join("/ttp-fhir/fhir/gpas/$pseudonymizeAllowCreate")
+            .join("gpas/gpasService")
             .unwrap();
-        let params = Parameters::builder()
-            .parameter(vec![
-                ParametersParameter::builder()
-                    .name("target".into())
-                    .value(ParametersParameterValue::String(
-                        self.gpas_domain.clone(),
-                    ))
-                    .build()
-                    .ok(),
-                ParametersParameter::builder()
-                    .name("original".into())
-                    .value(ParametersParameterValue::String(ident.into()))
-                    .build()
-                    .ok(),
-            ])
-            .build()
-            .unwrap();
+        let Self { gpas_domain, .. } = self;
+        let xml_body = format!(r#"<?xml version="1.0" encoding="utf-8"?>
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://psn.ttp.ganimed.icmvc.emau.org/">
+            <soapenv:Header/>
+            <soapenv:Body>
+                <tns:getOrCreatePseudonymFor>
+                    <!-- The parameters for the operation -->
+                    <value>{ident}</value>
+                    <domainName>{gpas_domain}</domainName>
+                </tns:getOrCreatePseudonymFor>
+            </soapenv:Body>
+            </soapenv:Envelope>
+        "#);
         let res = self
             .client
             .post(url)
-            .json(&params)
+            .body(xml_body)
             .add_auth(&self.ttp_auth)
             .await?
             .send()
@@ -275,25 +212,91 @@ impl GreifswaldConfig {
         if let Err(e) = res.error_for_status_ref() {
             ttp_bail!("Error requesting pseudonym: {e:#}\nBody was: {}", res.text().await.unwrap_or_else(|e| e.to_string()));
         }
-        let parameters = res
-            .json::<Parameters>()
-            .await?;
-        debug!(?parameters, "Got pseudonym response");
-        let Some(pseudonym) = parameters.parameter.get_param_by_name("pseudonym") else {
-            ttp_bail!("Response parameters did not contain a pseudonym")
+        let xml_res = res.text().await?;
+        let Some((_, psn_start)) = xml_res.split_once("<psn>") else {
+            ttp_bail!("Response did not contain a <psn> tag: {xml_res}");
         };
-        let Some(pseudonym_value) = pseudonym
-            .part
-            .get_param_by_name("pseudonym")
-            .and_then(|v| v.value.as_ref())
-        else {
-            ttp_bail!("Response did not contain a pseudonym")
-        };
-        let ParametersParameterValue::Identifier(pseudonym_ident) = pseudonym_value else {
-            ttp_bail!("Pseudonym was not an identifier")
-        };
-        Ok(pseudonym_ident.clone())
+        let psn = psn_start.chars().take_while(|c| *c != '<').collect::<String>();
+        Ok(psn)
     }
+}
+
+fn extract_mpi(xml: &str) -> Option<&str> {
+    // 1. Find the start of the <mpiId> block and get everything after it.
+    xml.split_once("<mpiId>")?.1
+        // 2. From that remainder, find the end of the block and get everything before it.
+        .split_once("</mpiId>")?.0
+        // 3. In the isolated block, find the <value> tag and get everything after it.
+        .split_once("<value>")?.1
+        // 4. Finally, find the closing </value> tag and get the content before it.
+        .split_once("</value>")
+        .map(|(value, _)| value.trim())
+}
+
+fn patient_to_xml(patient: &Patient) -> impl Display {
+    struct PatientXml<'a> {
+        patient: &'a Patient,
+    }
+    impl Display for PatientXml<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let patient = self.patient;
+            if let Some(name) = patient.name.first().and_then(Option::as_ref) {
+                if let Some(given) = name.given.first().and_then(Option::as_ref) {
+                    write!(f, "<firstName>{given}</firstName>")?;
+                }
+                if let Some(family) = &name.family {
+                    write!(f, "<lastName>{family}</lastName>")?;
+                }
+            }
+            if let Some(gender) = patient.gender {
+                let gender = match gender {
+                    AdministrativeGender::Female => 'F',
+                    AdministrativeGender::Male => 'M',
+                    AdministrativeGender::Other => 'O',
+                    AdministrativeGender::Unknown => 'U',
+                };
+                write!(f, "<gender>{gender}</gender>")?;
+            }
+            if let Some(birth_date) = patient.birth_date.as_ref() {
+                match birth_date {
+                    fhir_sdk::Date::Date(dt) => {
+                        write!(
+                            f,
+                            "<birthDate>{}-{:02}-{:02}T00:00:00</birthDate>",
+                            dt.year(),
+                            dt.month() as u8,
+                            dt.day()
+                        )?;
+                    }
+                    fhir_sdk::Date::YearMonth(year, month) => {
+                        write!(
+                            f,
+                            "<birthDate>{year}-{:02}-01T00:00:00</birthDate>",
+                            *month as u8
+                        )?;
+                    }
+                    fhir_sdk::Date::Year(year) => {
+                        write!(f, "<birthDate>{year}-01-01T00:00:00</birthDate>")?;
+                    }
+                }
+            }
+            if let Some(address) = patient.address.first().and_then(Option::as_ref) {
+                f.write_str("<contacts>")?;
+                if let Some(line) = address.line.first().and_then(Option::as_ref) {
+                    write!(f, "<street>{line}</street>")?;
+                }
+                if let Some(city) = &address.city {
+                    write!(f, "<city>{city}</city>")?;
+                }
+                if let Some(postal_code) = &address.postal_code {
+                    write!(f, "<zipCode>{postal_code}</zipCode>")?;
+                }
+                f.write_str("</contacts>")?;
+            }
+            Ok(())
+        }
+    }
+    PatientXml { patient }
 }
 
 /// Taken from: https://simplifier.net/packages/ths-greifswald.ttp-fhir-gw/2024.1.1/files/2432769
