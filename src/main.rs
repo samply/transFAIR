@@ -1,11 +1,10 @@
-use std::{process::ExitCode, time::Duration};
+use std::{process::ExitCode, sync::LazyLock, time::Duration};
 
 use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
 use config::Config;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
-use once_cell::sync::Lazy;
 use requests::update_data_request;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use futures_util::future::TryJoinAll;
@@ -21,7 +20,7 @@ mod fhir;
 mod requests;
 mod ttp;
 
-static CONFIG: Lazy<Config> = Lazy::new(Config::parse);
+static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
 #[tokio::main]
@@ -32,7 +31,7 @@ async fn main() -> ExitCode {
         .finish()
         .init();
     banner::print_banner();
-    trace!("{:#?}", Lazy::force(&CONFIG));
+    trace!("{:#?}", LazyLock::force(&CONFIG));
 
     let database_pool = SqlitePool::connect(CONFIG.database_url.as_str())
         .await.map_err(|e| {

@@ -1,7 +1,8 @@
+use std::sync::LazyLock;
+
 use axum::{extract::{Path, State}, Json};
 
 use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
-use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
@@ -9,7 +10,7 @@ use tracing::{trace, debug, error};
 
 use crate::{fhir::{FhirServer, PatientExt}, LinkageError, CONFIG};
 
-static REQUEST_SERVER: Lazy<FhirServer> = Lazy::new(|| {
+static REQUEST_SERVER: LazyLock<FhirServer> = LazyLock::new(|| {
     FhirServer::new(CONFIG.fhir_request_url.clone(), CONFIG.fhir_request_credentials.clone())
 });
 
