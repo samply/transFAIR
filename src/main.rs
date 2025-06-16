@@ -1,18 +1,20 @@
-use std::{process::ExitCode, sync::LazyLock, time::Duration};
+use std::{process::ExitCode, sync::{LazyLock, OnceLock}, time::Duration};
 
 use axum::{routing::{get, post}, Router};
 use chrono::{DateTime, Utc};
-use config::Config;
+use clap::Parser;
+use config::DicConfig;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
 use requests::update_data_request;
+use reqwest::Client;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use futures_util::future::TryJoinAll;
 use tracing::{debug, error, info, trace, warn, Level};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use ttp::Ttp;
 
-use crate::{fhir::PatientExt, requests::{create_data_request, list_data_requests, get_data_request}};
+use crate::{config::CliArgs, fhir::PatientExt, requests::{create_data_request, get_data_request, list_data_requests}};
 
 mod banner;
 mod config;
@@ -20,7 +22,8 @@ mod fhir;
 mod requests;
 mod ttp;
 
-static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
+pub static CLIENT: LazyLock<&Client> = LazyLock::new(|| INNER_CLIENT.get().expect("Client should be initialized before use"));
+static INNER_CLIENT: OnceLock<Client> = OnceLock::new();
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
 #[tokio::main]
@@ -30,18 +33,51 @@ async fn main() -> ExitCode {
         .with_env_filter(EnvFilter::from_default_env())
         .finish()
         .init();
-    banner::print_banner();
-    trace!("{:#?}", LazyLock::force(&CONFIG));
 
-    let database_pool = SqlitePool::connect(CONFIG.database_url.as_str())
+    let args = CliArgs::parse();
+    INNER_CLIENT.set(args.build_client()).unwrap();
+    match args.subcommand {
+        config::SubCommand::Dic(config) => {
+            dic_main(config).await
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DicAppState {
+    pub database_pool: Pool<Sqlite>,
+    pub config: &'static DicConfig,
+    pub request_server: &'static FhirServer,
+}
+
+impl DicAppState {
+    pub fn new(database_pool: Pool<Sqlite>, config: &'static DicConfig) -> Self {
+        let request_server = FhirServer::new(
+            config.fhir_request_url.clone(),
+            config.fhir_request_credentials.clone()
+        );
+        let request_server = Box::leak(Box::new(request_server));
+        Self {
+            database_pool,
+            config,
+            request_server,
+        }
+    }
+}
+
+async fn dic_main(config: DicConfig) -> ExitCode {
+    banner::print_banner();
+    trace!("{config:#?}");
+    let config: &'static _ = Box::leak(Box::new(config));
+    let database_pool = SqlitePool::connect(config.database_url.as_str())
         .await.map_err(|e| {
-            error!("Unable to connect to database file {}. Error is: {}", CONFIG.database_url.as_str(), e);
+            error!("Unable to connect to database file {}. Error is: {}", config.database_url.as_str(), e);
             return
         }).unwrap();
     
     let _ = sqlx::migrate!().run(&database_pool).await;
 
-    if let Some(ttp) = &CONFIG.ttp {
+    if let Some(ttp) = &config.ttp {
         const RETRY_COUNT: i32 = 30;
         let mut failures = 0;
         while !(ttp.check_availability().await) {
@@ -61,29 +97,28 @@ async fn main() -> ExitCode {
         }
         info!("Connected to ttp {}", ttp.url);
         // verify that both, the exchange id system and project id system are configured in the ttp
-        for idtype in [&CONFIG.exchange_id_system, &ttp.project_id_system] {
+        for idtype in [&config.exchange_id_system, &ttp.project_id_system] {
             if !(ttp.check_idtype_available(&idtype).await) {
-                error!("Configured exchange id system is not available in TTP: expected {}", &idtype);
+                error!("Configured exchange id system '{idtype}' is not available in TTP.");
                 return ExitCode::from(1)
             }
         }
     }
-
-    let database_pool_for_axum = database_pool.clone();
-
+    let state = DicAppState::new(database_pool, config);
+    let state_for_fetch = state.clone();
     tokio::spawn(async move {
         const RETRY_PERIOD: Duration = Duration::from_secs(60);
         let input_fhir_server =  FhirServer::new(
-            CONFIG.fhir_input_url.clone(),
-            CONFIG.fhir_input_credentials.clone()
+            config.fhir_input_url.clone(),
+            config.fhir_input_credentials.clone()
         );
-        let output_fhir_server =  FhirServer::new (
-            CONFIG.fhir_output_url.clone(),
-            CONFIG.fhir_output_credentials.clone()
+        let output_fhir_server =  FhirServer::new(
+            config.fhir_output_url.clone(),
+            config.fhir_output_credentials.clone()
         );
         loop {
             // TODO: Persist the updated data in the database
-            match fetch_data(&input_fhir_server, &output_fhir_server, &database_pool).await {
+            match fetch_data(&input_fhir_server, &output_fhir_server, &state_for_fetch).await {
                 Ok(status) => info!("{}", status),
                 Err(error) => warn!("Failed to fetch project data: {error:#}. Will try again in {}s", RETRY_PERIOD.as_secs())
             }
@@ -96,7 +131,7 @@ async fn main() -> ExitCode {
         .route("/", post(create_data_request))
         .route("/", get(list_data_requests))
         .route("/{request_id}", get(get_data_request))
-        .with_state(database_pool_for_axum);
+        .with_state(state);
 
     let app = Router::new()
         .nest("/requests", request_routes);
@@ -111,14 +146,14 @@ async fn main() -> ExitCode {
 
 
 // Pull data from input_fhir_server and push it to output_fhir_server
-async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer, database_pool: &Pool<Sqlite>) -> anyhow::Result<String> {
-    let fetch_start_date = extract_execution_time(database_pool).await;
+async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer, state: &DicAppState) -> anyhow::Result<String> {
+    let fetch_start_date = extract_execution_time(&state.database_pool).await;
     let mut new_data = input_fhir_server.pull_new_data(
         fetch_start_date.naive_local().into()
     ).await?;
     let fetch_finish_date = chrono::prelude::Utc::now();
     if new_data.entry.is_empty() {
-        debug!("Received empty bundle from mdat server ({}). No update necessary", CONFIG.fhir_input_url);
+        debug!("Received empty bundle from mdat server ({}). No update necessary", input_fhir_server.url);
     } else {
         for entry in new_data.entry.iter_mut().flatten() {
             let Some(resource) = &mut entry.resource else {
@@ -152,8 +187,8 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
             };
 
             let mut linkage_results = None;
-            if let Some(ttp) = &CONFIG.ttp {
-                linkage_results = Some(replace_exchange_identifiers(bundle_id_value, entry_bundle, ttp, &database_pool).await?);
+            if let Some(ttp) = &state.config.ttp {
+                linkage_results = Some(replace_exchange_identifiers(bundle_id_value, entry_bundle, ttp, &state).await?);
             };
 
             // TODO: integrate transformation using transfair-batch here
@@ -163,15 +198,15 @@ async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirSer
                 Err(error) => error!("Received the following error: {error:#}"),
             };
 
-            update_data_request(bundle_id_value, linkage_results, &database_pool).await.unwrap();
+            update_data_request(bundle_id_value, linkage_results, &state.database_pool).await.unwrap();
 
         }
 
     }
     let finish_as_timestamp = fetch_finish_date.timestamp_millis();
-    let _ = sqlx::query!(
+    sqlx::query!(
         "UPDATE last_request SET execution_time = $1 WHERE id = 1", finish_as_timestamp
-    ).fetch_optional(database_pool).await;
+    ).fetch_optional(&state.database_pool).await?;
     Ok(format!("Last fetch for new data executed at {:?}", fetch_finish_date))
 }
 
@@ -211,7 +246,7 @@ enum LinkageError {
     IdentifierNotLinkable(ResourceType)
 }
 
-async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &mut Bundle, ttp: &Ttp, database_connection: &Pool<Sqlite>) -> sqlx::Result<Vec<Result<ResourceType, LinkageError>>> {
+async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &mut Bundle, ttp: &Ttp, state: &DicAppState) -> sqlx::Result<Vec<Result<ResourceType, LinkageError>>> {
     new_data.entry.iter_mut().flatten().map(|entry| {
         let Some(resource) = &mut entry.resource else {
             return Err(LinkageError::EntryWithoutResource)
@@ -219,7 +254,7 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
 
         let rt = resource.resource_type();
         let identifier = match resource {
-            Resource::Patient(patient) => patient.get_identifier_mut(&CONFIG.exchange_id_system),
+            Resource::Patient(patient) => patient.get_identifier_mut(&state.config.exchange_id_system),
             Resource::Consent(consent) => match consent.patient.as_mut() {
                 Some(patient) => patient.identifier.as_mut(),
                 None => return Err(LinkageError::NoReference(rt))
@@ -245,7 +280,7 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
             return Err(LinkageError::IdentifierWithoutSystem(rt))
         };
 
-        if system != &CONFIG.exchange_id_system {
+        if system != &state.config.exchange_id_system {
             Err(LinkageError::WrongIdentifierType(rt))
         } else {
             Ok((identifier, rt))
@@ -259,7 +294,7 @@ async fn replace_exchange_identifiers(data_request_identifier: &str, new_data: &
         let result = sqlx::query!(
             "SELECT project_id FROM data_requests WHERE id = $1",
             data_request_identifier
-        ).fetch_optional(database_connection).await?;
+        ).fetch_optional(&state.database_pool).await?;
         if let Some(patient_identifier) = result {
             let Some(project_id) = patient_identifier.project_id else {
                 return Ok(Err(LinkageError::MissingIdentifierValue(rt)));

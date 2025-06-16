@@ -4,14 +4,13 @@ pub mod greifswald;
 use std::ops::Deref;
 
 use axum::response::IntoResponse;
-use clap::{FromArgMatches, Parser, ValueEnum};
 use fhir_sdk::r4b::resources::{Consent, Patient};
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{StatusCode, Url};
 use thiserror::Error;
 
 use crate::config::Auth;
 
-#[derive(Parser, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct TtpInner {
     #[clap(
         long = "ttp-url",
@@ -29,57 +28,12 @@ pub struct TtpInner {
         default_value = ""
     )]
     pub ttp_auth: Auth,
-
-    #[clap(skip)]
-    pub client: Client,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, clap::Subcommand)]
 pub enum Ttp {
     Mainzelliste(mainzelliste::MlConfig),
     Greifswald(greifswald::GreifswaldConfig)
-}
-
-#[derive(ValueEnum, Clone, Copy)]
-enum TtpType {
-    Mainzelliste,
-    Greifswald,
-}
-
-#[derive(clap::Args)]
-struct TtpTypeParser {
-    #[clap(long, env, default_value = "mainzelliste")]
-    ttp_type: TtpType,
-}
-
-impl FromArgMatches for Ttp {
-    fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
-        let ttp = match TtpTypeParser::from_arg_matches(matches)?.ttp_type {
-            TtpType::Mainzelliste => Ttp::Mainzelliste(mainzelliste::MlConfig::from_arg_matches(matches)?),
-            TtpType::Greifswald => Ttp::Greifswald(greifswald::GreifswaldConfig::from_arg_matches(matches)?),
-        };
-        Ok(ttp)
-    }
-
-    fn update_from_arg_matches(&mut self, _matches: &clap::ArgMatches) -> Result<(), clap::Error> {
-        Ok(())
-    }
-}
-
-impl clap::Args for Ttp {
-    fn augment_args(cmd: clap::Command) -> clap::Command {
-        let cmd = TtpTypeParser::augment_args(cmd);
-        cmd.defer(|cmd| {
-            match TtpTypeParser::from_arg_matches(&cmd.clone().get_matches()).unwrap().ttp_type {
-                TtpType::Mainzelliste => mainzelliste::MlConfig::augment_args(cmd),
-                TtpType::Greifswald => greifswald::GreifswaldConfig::augment_args(cmd),
-            }
-        })
-    }
-
-    fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
-        cmd
-    }
 }
 
 impl Deref for Ttp {
@@ -122,9 +76,10 @@ impl Ttp {
     pub async fn request_project_pseudonym(
         &self,
         patient: Patient,
+        exchange_id_system: &str,
     ) -> axum::response::Result<Patient> {
         match self {
-            Ttp::Mainzelliste(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),
+            Ttp::Mainzelliste(config) => config.request_project_pseudonym(patient, exchange_id_system).await.map_err(Into::into),
             Ttp::Greifswald(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),
         }
     }

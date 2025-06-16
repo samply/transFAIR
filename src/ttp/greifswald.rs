@@ -1,7 +1,6 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use clap::Parser;
 use fhir_sdk::r4b::codes::AdministrativeGender;
 use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
 use fhir_sdk::r4b::resources::{
@@ -10,11 +9,11 @@ use fhir_sdk::r4b::resources::{
 use fhir_sdk::r4b::types::Identifier;
 
 use crate::config::ClientBuilderExt;
-use crate::ttp_bail;
+use crate::{ttp_bail, CLIENT};
 
 use super::TtpError;
 
-#[derive(Debug, Parser, Clone)]
+#[derive(Debug, clap::Args, Clone)]
 pub struct GreifswaldConfig {
     #[clap(flatten)]
     pub base: super::TtpInner,
@@ -39,7 +38,7 @@ impl std::ops::Deref for GreifswaldConfig {
 
 impl GreifswaldConfig {
     pub async fn check_availability(&self) -> bool {
-        self.client.get(self.url.clone()).send().await.is_ok()
+        CLIENT.get(self.url.clone()).send().await.is_ok()
     }
 
     pub async fn check_idtype_available(&self, idtype: &str) -> bool {
@@ -95,8 +94,7 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
@@ -153,8 +151,7 @@ impl GreifswaldConfig {
                 </ser:requestMPIWithConfig>
             </soap:Body>
             </soap:Envelope>"#);
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .body(soap_body)
             .add_auth(&self.ttp_auth)
@@ -177,9 +174,7 @@ impl GreifswaldConfig {
                 .value(psn)
                 .build()
                 .unwrap(),
-        )])
-            .build()
-            .unwrap();
+        )]).build().unwrap();
         Ok(patient)
     }
 
@@ -201,8 +196,7 @@ impl GreifswaldConfig {
             </soapenv:Body>
             </soapenv:Envelope>
         "#);
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .body(xml_body)
             .add_auth(&self.ttp_auth)
@@ -342,7 +336,6 @@ mod tests {
         },
         time::Date,
     };
-    use reqwest::Client;
 
     #[tokio::test]
     #[ignore = "Unclear how we proceed here as it does not seem to accept a Consent resource"]
@@ -351,7 +344,6 @@ mod tests {
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "MII".into(),
-                client: Client::new(),
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
@@ -377,7 +369,6 @@ mod tests {
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "Transferstelle A".into(),
-                client: Client::new(),
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
