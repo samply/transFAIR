@@ -5,21 +5,20 @@ use fhir_sdk::r4b::{
     resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
     types::Identifier,
 };
-use reqwest::{header, Client, StatusCode, Url};
+use reqwest::{header, StatusCode, Url};
 use tracing::debug;
 
-use crate::{config::{Auth, ClientBuilderExt}, requests::DataRequestPayload, CONFIG};
+use crate::{config::{Auth, ClientBuilderExt}, requests::DataRequestPayload, CLIENT};
 
 #[derive(Clone, Debug)]
 pub struct FhirServer {
-    url: Url,
+    pub url: Url,
     auth: Auth,
-    client: Client,
 }
 
 impl FhirServer {
     pub fn new(url: Url, auth: Auth) -> Self {
-        Self { url, auth, client: CONFIG.client.clone()}
+        Self { url, auth }
     }
     
     pub async fn post_data_request(
@@ -31,7 +30,7 @@ impl FhirServer {
 
         let bundle: Bundle = payload.into();
 
-        let response = self.client
+        let response = CLIENT
             .post(bundle_endpoint)
             .add_auth(&self.auth)
             .await?
@@ -58,7 +57,7 @@ impl FhirServer {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Fetching new data from: {}", bundle_endpoint);
         let query = vec![("_lastUpdated", format!("gt{}", last_update.format("%Y-%m-%dT%H:%M:%S").to_string()))];
-        let response = self.client
+        let response = CLIENT
             .get(bundle_endpoint)
             .add_auth(&self.auth)
             .await?
@@ -77,7 +76,7 @@ impl FhirServer {
     pub async fn post_data(&self, bundle: &Bundle) -> anyhow::Result<reqwest::Response> {
         let bundle_endpoint = format!("{}fhir", self.url);
         debug!("Posting data to output fhir server: {}", bundle_endpoint);
-        self.client
+        CLIENT
             .post(bundle_endpoint)
             .add_auth(&self.auth)
             .await?
@@ -89,7 +88,7 @@ impl FhirServer {
 }
 
 pub trait PatientExt: Sized {
-    fn pseudonymize(self) -> axum::response::Result<Self>;
+    fn pseudonymize(self, exchange_id_system: &str) -> axum::response::Result<Self>;
     fn add_id_request(self, id: String) -> Self;
     fn get_identifier(&self, id_system: &str) -> Option<&Identifier>;
     fn get_identifier_mut(&mut self, id_system: &str) -> Option<&mut Identifier>;
@@ -120,16 +119,16 @@ impl PatientExt for Patient {
             .find(|x| x.system.as_deref() == Some(id_system))
     }
 
-    fn pseudonymize(self) -> axum::response::Result<Self> {
+    fn pseudonymize(self, exchange_id_system: &str) -> axum::response::Result<Self> {
         let Some(exchange_identifier) = self
             .identifier
             .iter()
             .find(|x| {
-                x.as_ref().is_some_and(|y| y.system.as_deref() == Some(&CONFIG.exchange_id_system))
+                x.as_ref().is_some_and(|y| y.system.as_deref() == Some(exchange_id_system))
             }) else {
                 return Err((
                     StatusCode::BAD_REQUEST,
-                    format!("Request did not contain identifier of system {}", &CONFIG.exchange_id_system)
+                    format!("Request did not contain identifier of system {exchange_id_system}")
                 ).into());
             };
         let pseudonymized_patient = Patient::builder()
