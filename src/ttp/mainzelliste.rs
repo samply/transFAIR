@@ -1,15 +1,14 @@
 //! Client implementation for Mainzelliste TTP
-use clap::Parser;
 use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{fhir::PatientExt, ttp_bail, CONFIG};
+use crate::{fhir::PatientExt, ttp_bail, CLIENT};
 
 use super::TtpError;
 
-#[derive(Debug, Parser, Clone)]
+#[derive(Debug, clap::Args, Clone)]
 pub struct MlConfig {
     #[clap(flatten)]
     pub base: super::TtpInner,
@@ -31,7 +30,7 @@ impl std::ops::Deref for MlConfig {
 
 impl MlConfig {
     pub(super) async fn check_availability(&self) -> bool {
-        let response = match self.client
+        let response = match CLIENT
             .get(self.url.clone())
             .header( "Accept", "application/json")
             .send()
@@ -67,7 +66,7 @@ impl MlConfig {
     pub async fn get_supported_ids(&self) -> Result<Vec<String>, (StatusCode, &'static str)> {
         let idtypes_endpoint = self.url.join("configuration/idTypes").unwrap();
 
-        let supported_ids = self.client
+        let supported_ids = CLIENT
             .get(idtypes_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
             .send()
@@ -97,14 +96,15 @@ impl MlConfig {
     pub(super) async fn request_project_pseudonym(
         &self,
         patient: Patient,
+        exchange_id_system: &str,
     ) -> Result<Patient, TtpError> {
         let patient = patient
-          .add_id_request(CONFIG.exchange_id_system.clone())
+          .add_id_request(exchange_id_system.to_owned())
           .add_id_request(self.project_id_system.clone());
         // TODO: Need to ensure request for project pseudonym is included
         let patients_endpoint = self.url.join("fhir/Patient").unwrap();
 
-        let response = self.client
+        let response = CLIENT
             .post(patients_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
             .json(&patient)
@@ -125,7 +125,7 @@ impl MlConfig {
         let sessions_endpoint = self.url.join("sessions").unwrap();
         debug!("Requesting Session from Mainzelliste: {}", sessions_endpoint);
 
-        self.client
+        CLIENT
             .post(sessions_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
             .send()
@@ -144,7 +144,7 @@ impl MlConfig {
         let token_request = TokenRequest {
             token_type
         };
-        self.client
+        CLIENT
             .post(tokens_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
             .json(&token_request)
@@ -192,7 +192,7 @@ impl MlConfig {
 
         let consent_endpoint = self.url.join("fhir/Consent").unwrap();
 
-        let response: reqwest::Response = self.client
+        let response: reqwest::Response = CLIENT
             .post(consent_endpoint)
             .header("Authorization", format!("MainzellisteToken {}", token.id))
             .header("Content-Type", "application/fhir+json")

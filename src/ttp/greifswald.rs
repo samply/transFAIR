@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use clap::Parser;
 use fhir_sdk::r4b::resources::{Bundle, ParametersParameterValue, Resource};
 use fhir_sdk::r4b::resources::{
     Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
@@ -10,11 +9,11 @@ use tracing::debug;
 
 use crate::config::ClientBuilderExt;
 use crate::fhir::ParameterExt;
-use crate::{ttp_bail, CONFIG};
+use crate::{ttp_bail, CLIENT};
 
 use super::TtpError;
 
-#[derive(Debug, Parser, Clone)]
+#[derive(Debug, clap::Args, Clone)]
 pub struct GreifswaldConfig {
     #[clap(flatten)]
     pub base: super::TtpInner,
@@ -39,7 +38,7 @@ impl std::ops::Deref for GreifswaldConfig {
 
 impl GreifswaldConfig {
     pub async fn check_availability(&self) -> bool {
-        self.client.get(self.url.clone()).send().await.is_ok()
+        CLIENT.get(self.url.clone()).send().await.is_ok()
     }
 
     pub async fn check_idtype_available(&self, idtype: &str) -> bool {
@@ -95,8 +94,7 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
@@ -130,6 +128,7 @@ impl GreifswaldConfig {
     pub(super) async fn request_project_pseudonym(
         &self,
         mut patient: Patient,
+        exchange_id_system: &str,
     ) -> Result<Patient, TtpError> {
         let url = self.url.join("ttp-fhir/fhir/epix/$addPatient").unwrap();
         let params = Parameters::builder()
@@ -178,8 +177,7 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
@@ -218,13 +216,7 @@ impl GreifswaldConfig {
             .identifier
             .iter()
             .flatten()
-            .find(|i| {
-                if cfg!(test) {
-                    i.system.as_deref() == Some("https://ths-greifswald.de/fhir/epix/identifier/MPI")
-                } else {
-                    i.system.as_deref() == Some(&CONFIG.exchange_id_system)
-                }
-            })
+            .find(|i| i.system.as_deref() == Some(exchange_id_system))
             .and_then(|i| i.value.as_deref())
         else {
             ttp_bail!("Patient returned by matching did not contain a mpi identifier")
@@ -264,8 +256,7 @@ impl GreifswaldConfig {
             ])
             .build()
             .unwrap();
-        let res = self
-            .client
+        let res = CLIENT
             .post(url)
             .json(&params)
             .add_auth(&self.ttp_auth)
@@ -339,7 +330,6 @@ mod tests {
         },
         time::Date,
     };
-    use reqwest::Client;
 
     #[tokio::test]
     #[ignore = "Unclear how we proceed here as it does not seem to accept a Consent resource"]
@@ -348,7 +338,6 @@ mod tests {
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "MII".into(),
-                client: Client::new(),
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
@@ -374,14 +363,13 @@ mod tests {
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "Transferstelle A".into(),
-                client: Client::new(),
                 ttp_auth: Auth::None,
             },
             source: "dummy_safe_source".into(),
             epix_domain: "Demo".into(),
             gpas_domain: "Transferstelle A".into(),
         };
-        dbg!(ttp.request_project_pseudonym(fake_patient())
+        dbg!(ttp.request_project_pseudonym(fake_patient(), "https://ths-greifswald.de/fhir/epix/identifier/MPI")
             .await
             .unwrap());
     }

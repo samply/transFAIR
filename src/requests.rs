@@ -1,5 +1,3 @@
-use std::sync::LazyLock;
-
 use axum::{extract::{Path, State}, Json};
 
 use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
@@ -8,11 +6,7 @@ use serde::{Serialize, Deserialize};
 use sqlx::{Pool, Sqlite};
 use tracing::{trace, debug, error};
 
-use crate::{fhir::{FhirServer, PatientExt}, LinkageError, CONFIG};
-
-static REQUEST_SERVER: LazyLock<FhirServer> = LazyLock::new(|| {
-    FhirServer::new(CONFIG.fhir_request_url.clone(), CONFIG.fhir_request_credentials.clone())
-});
+use crate::{fhir::PatientExt, DicAppState, LinkageError};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
@@ -39,7 +33,7 @@ pub struct DataRequestPayload {
 
 // POST /requests; Creates a new Data Request
 pub async fn create_data_request(
-    State(database_pool): State<Pool<Sqlite>>,
+    State(DicAppState { database_pool, config, request_server }): State<DicAppState>,
     Json(payload): Json<DataRequestPayload>
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let consent = payload.consent;
@@ -47,9 +41,9 @@ pub async fn create_data_request(
 
     let mut project_identifier = None;
 
-    if let Some(ttp) = &CONFIG.ttp {
+    if let Some(ttp) = &config.ttp {
         // pseudonymize the patient
-        patient = ttp.request_project_pseudonym(patient).await?;
+        patient = ttp.request_project_pseudonym(patient, &config.exchange_id_system).await?;
         // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         if let Some(ref consent) = consent {
@@ -61,23 +55,23 @@ pub async fn create_data_request(
     }
 
     // ensure that we have at least one identifier with which we can link
-    let Some(exchange_identifier) = patient.get_identifier(&CONFIG.exchange_id_system).cloned() else {
+    let Some(exchange_identifier) = patient.get_identifier(&config.exchange_id_system).cloned() else {
         return Err(
-            (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &CONFIG.exchange_id_system)).into()
+            (StatusCode::BAD_REQUEST, format!("Couldn't identify a valid identifier with system {}!", &config.exchange_id_system)).into()
         );
     };
 
     let Some(ref exchange_identifier) = exchange_identifier.value else {
         return Err(
-            (StatusCode::BAD_REQUEST, format!("No valid value for identifier {}", &CONFIG.exchange_id_system)).into()
+            (StatusCode::BAD_REQUEST, format!("No valid value for identifier {}", &config.exchange_id_system)).into()
         )
     };
 
-    patient = patient.pseudonymize()?;
+    patient = patient.pseudonymize(&config.exchange_id_system)?;
 
-    let linked_consent = consent.map(|c| link_patient_consent(c, &patient)).transpose()?;
+    let linked_consent = consent.map(|c| link_patient_consent(c, &patient, &config.exchange_id_system)).transpose()?;
     // und in beiden fällen anschließend die Anfrage beim Datenintegrationszentrum abgelegt werden
-    let data_request_id = REQUEST_SERVER.post_data_request(DataRequestPayload {
+    let data_request_id = request_server.post_data_request(DataRequestPayload {
         patient,
         consent: linked_consent
     }).await.map_err(|e| {
@@ -110,7 +104,7 @@ pub async fn create_data_request(
 
 // GET /requests; Lists all running Data Requests
 pub async fn list_data_requests(
-    State(database_pool): State<Pool<Sqlite>>
+    State(DicAppState { database_pool, .. }): State<DicAppState>
 ) -> Result<Json<Vec<DataRequest>>, (StatusCode, &'static str)> {
     let data_requests = sqlx::query_as!(
         DataRequest,
@@ -124,7 +118,7 @@ pub async fn list_data_requests(
 
 // GET /requests/<request-id>; Gets the Request specified by id in Path
 pub async fn get_data_request(
-    State(database_pool): State<Pool<Sqlite>>,
+    State(DicAppState { database_pool, .. }): State<DicAppState>,
     Path(request_id): Path<String>
 ) -> Result<Json<DataRequest>, (StatusCode, &'static str)> {
     debug!("Information on data request {} requested.", request_id);
@@ -142,8 +136,8 @@ pub async fn get_data_request(
     }
 }
 
-fn link_patient_consent(mut consent: Consent, patient: &Patient) -> Result<Consent, (StatusCode, &'static str)> {
-    let exchange_identifier= patient.get_identifier(&CONFIG.exchange_id_system);
+fn link_patient_consent(mut consent: Consent, patient: &Patient, exchange_id_system: &str) -> Result<Consent, (StatusCode, &'static str)> {
+    let exchange_identifier= patient.get_identifier(exchange_id_system);
     let Some(exchange_identifier) = exchange_identifier else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Unable to generate exchange identifier"));
     };
