@@ -7,6 +7,7 @@ use fhir_sdk::r4b::resources::{
     Consent, Parameters, ParametersParameter, Patient, QuestionnaireResponse,
 };
 use fhir_sdk::r4b::types::Identifier;
+use reqwest::Url;
 
 use crate::config::ClientBuilderExt;
 use crate::{ttp_bail, CLIENT};
@@ -27,6 +28,9 @@ pub struct GreifswaldConfig {
 
     #[clap(long = "ttp-gw-gpas-domain", env = "TTP_GW_GPAS_DOMAIN")]
     gpas_domain: String,
+
+    #[clap(long = "ttp-gw-gpas-url", env = "TTP_GW_GPAS_URL")]
+    gpas_url: Url,
 }
 
 impl std::ops::Deref for GreifswaldConfig {
@@ -181,7 +185,7 @@ impl GreifswaldConfig {
 
     async fn request_pseudonym(&self, ident: &str) -> Result<String, TtpError> {
         let url = self
-            .url
+            .gpas_url
             .join("gpas/gpasService")
             .unwrap();
         let Self { gpas_domain, .. } = self;
@@ -345,6 +349,7 @@ mod tests {
     #[ignore = "Unclear how we proceed here as it does not seem to accept a Consent resource"]
     async fn test_document_patient_consent() {
         let ttp = GreifswaldConfig {
+            gpas_url: "https://demo.ths-greifswald.de".parse().unwrap(),
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "MII".into(),
@@ -370,6 +375,7 @@ mod tests {
     #[tokio::test]
     async fn test_request_project_pseudonym() {
         let ttp = GreifswaldConfig {
+            gpas_url: "https://demo.ths-greifswald.de".parse().unwrap(),
             base: TtpInner {
                 url: "https://demo.ths-greifswald.de".parse().unwrap(),
                 project_id_system: "Transferstelle A".into(),
