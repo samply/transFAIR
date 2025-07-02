@@ -133,6 +133,7 @@ impl GreifswaldConfig {
     pub(super) async fn request_project_pseudonym(
         &self,
         patient: Patient,
+        exchange_id_system: &str,
     ) -> Result<Patient, TtpError> {
         let url = self.url.join("epix/epixService").unwrap();
         let Self { epix_domain, source, .. } = self;
@@ -143,17 +144,13 @@ impl GreifswaldConfig {
                 xmlns:ser="http://service.epix.ttp.icmvc.emau.org/">
             <soap:Header/>
             <soap:Body>
-                <ser:requestMPIWithConfig>
+                <ser:requestMPI>
                     <domainName>{epix_domain}</domainName>
                     <identity>
                         {patient_xml}
                     </identity>
                     <sourceName>{source}</sourceName>
-                    <requestConfig>
-                        <forceReferenceUpdate>false</forceReferenceUpdate>
-                        <saveAction>DONT_SAVE_ON_PERFECT_MATCH</saveAction>
-                    </requestConfig>
-                </ser:requestMPIWithConfig>
+                </ser:requestMPI>
             </soap:Body>
             </soap:Envelope>"#);
         let res = CLIENT
@@ -174,12 +171,20 @@ impl GreifswaldConfig {
         };
         let psn = self.request_pseudonym(&mpi).await?;
         let patient = Patient::builder()
-            .identifier(vec![Some(Identifier::builder()
-                .system(self.project_id_system.clone())
-                .value(psn)
-                .build()
-                .unwrap(),
-        )]).build().unwrap();
+            .identifier(vec![
+                Some(Identifier::builder()
+                    .system(self.project_id_system.clone())
+                    .value(psn)
+                    .build()
+                    .unwrap()),
+                Some(Identifier::builder()
+                    .system(exchange_id_system.to_owned())
+                    .value(mpi.into())
+                    .build()
+                    .unwrap())
+                ])
+            .build()
+            .unwrap();
         Ok(patient)
     }
 
@@ -385,7 +390,7 @@ mod tests {
             epix_domain: "Demo".into(),
             gpas_domain: "Transferstelle A".into(),
         };
-        dbg!(ttp.request_project_pseudonym(fake_patient())
+        dbg!(ttp.request_project_pseudonym(fake_patient(), "test")
             .await
             .unwrap());
     }
