@@ -80,7 +80,7 @@ impl Ttp {
     ) -> axum::response::Result<Patient> {
         match self {
             Ttp::Mainzelliste(config) => config.request_project_pseudonym(patient, exchange_id_system).await.map_err(Into::into),
-            Ttp::Greifswald(config) => config.request_project_pseudonym(patient).await.map_err(Into::into),
+            Ttp::Greifswald(config) => config.request_project_pseudonym(patient, exchange_id_system).await.map_err(Into::into),
         }
     }
 }
