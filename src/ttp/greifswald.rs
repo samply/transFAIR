@@ -10,6 +10,7 @@ use fhir_sdk::r4b::types::Identifier;
 
 use crate::config::ClientBuilderExt;
 use crate::{ttp_bail, CLIENT};
+use crate::fhir::PatientExt;
 
 use super::TtpError;
 
@@ -286,6 +287,9 @@ fn patient_to_xml(patient: &Patient) -> impl Display {
                     write!(f, "<zipCode>{postal_code}</zipCode>")?;
                 }
                 f.write_str("</contacts>")?;
+            }
+            if let Some(pat_id) = patient.get_identifier("pat-id").and_then(|i| i.value.as_ref()) {
+                write!(f, "<value1>{pat_id}</value1>")?;
             }
             Ok(())
         }
