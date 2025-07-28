@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fs, path::PathBuf, str::FromStr, sync::LazyLock, time::{Duration, Instant}};
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser};
+use jsonwebtoken::EncodingKey;
 use reqwest::{Certificate, Client, Url};
 use anyhow::anyhow;
 use tokio::sync::RwLock;
@@ -86,7 +87,7 @@ fn build_client(tls_ca_certificates_dir: &Option<PathBuf>, disable_tls: bool) ->
     client_builder.build().expect("Unable to initially build reqwest client")
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Auth {
     None,
     Basic {
@@ -97,6 +98,23 @@ pub enum Auth {
         client_id: String,
         client_secret: String,
         token_url: Url,
+    },
+    Smart {
+        client_id: String,
+        priv_key: EncodingKey,
+        token_url: Url,
+        scope: String,
+    }
+}
+
+impl std::fmt::Debug for Auth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Basic { user, pw } => f.debug_struct("Basic").field("user", user).field("pw", pw).finish(),
+            Self::Oauth { client_id, token_url, .. } => f.debug_struct("Oauth").field("client_id", client_id).field("token_url", token_url).finish(),
+            Self::Smart { client_id, token_url, scope, .. } => f.debug_struct("Smart").field("client_id", client_id).field("token_url", token_url).field("scope", scope).finish(),
+        }
     }
 }
 
@@ -115,19 +133,36 @@ impl FromStr for Auth {
                 token_url: parts.next().ok_or(anyhow!("Missing OAuth token endpoint url"))?.parse()?,
             })
         }
+        if s.starts_with("Smart") {
+            let mut parts = s.split(' ').skip(1);
+            return Ok(Self::Smart {
+                client_id: parts.next().ok_or(anyhow!("Missing client id"))?.into(),
+                priv_key: {
+                    let path = parts.next().ok_or(anyhow!("Missing private key file"))?;
+                    EncodingKey::from_rsa_pem(&fs::read(path)?)?
+                },
+                token_url: parts.next().ok_or(anyhow!("Missing OAuth token endpoint url"))?.parse()?,
+                scope: parts.next().unwrap_or("system/*.rs").into()
+            })
+        }
         let (user, pw) = s.split_once(":").ok_or(anyhow!("Credentials should be in the form of '<user>:<pw>'"))?;
         Ok(Self::Basic { user: user.to_owned(), pw: pw.to_owned() })
     }
 }
 
 pub trait ClientBuilderExt {
-    async fn add_auth(self, auth: &Auth) -> reqwest::Result<reqwest::RequestBuilder>;
+    async fn add_auth(self, auth: &Auth) -> anyhow::Result<reqwest::RequestBuilder>;
 }
 
 static OIDC_TOKENS: LazyLock<RwLock<HashMap<String, (Instant, String)>>> = LazyLock::new(Default::default);
 
 impl ClientBuilderExt for reqwest::RequestBuilder {
-    async fn add_auth(self, auth: &Auth) -> reqwest::Result<Self> {
+    async fn add_auth(self, auth: &Auth) -> anyhow::Result<Self> {
+        #[derive(serde::Deserialize)]
+        struct TokenRes {
+            expires_in: u64,
+            access_token: String,
+        }
         let res = match auth {
             Auth::Basic { user, pw } => self.basic_auth(user, Some(pw)),
             Auth::Oauth { client_id, client_secret, token_url } => {
@@ -138,11 +173,6 @@ impl ClientBuilderExt for reqwest::RequestBuilder {
                             return Ok(self.bearer_auth(token));
                         }
                     }
-                }
-                #[derive(serde::Deserialize)]
-                struct TokenRes {
-                    expires_in: u64,
-                    access_token: String,
                 }
                 let TokenRes { expires_in, access_token } = CONFIG.client
                     .post(token_url.clone())
@@ -156,6 +186,47 @@ impl ClientBuilderExt for reqwest::RequestBuilder {
                     .error_for_status()?
                     .json::<TokenRes>()
                     .await?;
+                let res = self.bearer_auth(&access_token);
+                OIDC_TOKENS.write().await.insert(client_id.clone(), (Instant::now() + Duration::from_secs(expires_in), access_token));
+                res
+            }
+            Auth::Smart {
+                client_id,
+                priv_key,
+                token_url,
+                scope
+            } => {
+                {
+                    let read_lock = OIDC_TOKENS.read().await;
+                    if let Some((ttl, token)) = read_lock.get(client_id) {
+                        if *ttl <= Instant::now() {
+                            return Ok(self.bearer_auth(token));
+                        }
+                    }
+                }
+                let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS384);
+                let claims = serde_json::json!({
+                    "iss": client_id,
+                    "aud": token_url.as_str(),
+                    "sub": client_id,
+                    "jti": uuid::Uuid::new_v4().to_string(),
+                    "exp": jsonwebtoken::get_current_timestamp() + 60,
+                });
+                let client_assertion = jsonwebtoken::encode(&header, &claims, &priv_key)?;
+                let res = CONFIG.client
+                    .post(token_url.clone())
+                    .form(&serde_json::json!({
+                        "grant_type": "client_credentials",
+                        "scope": scope,
+                        "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        "client_assertion": client_assertion
+                    }))
+                    .send()
+                    .await?;
+                if let Err(e) = res.error_for_status_ref() {
+                    return Err(anyhow!("Error while requesting token: {e}\n Response: {}", res.text().await?));
+                }
+                let TokenRes { expires_in, access_token } = res.json::<TokenRes>().await?;
                 let res = self.bearer_auth(&access_token);
                 OIDC_TOKENS.write().await.insert(client_id.clone(), (Instant::now() + Duration::from_secs(expires_in), access_token));
                 res
