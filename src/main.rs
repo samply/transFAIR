@@ -22,7 +22,10 @@ mod fhir;
 mod requests;
 mod ttp;
 
+#[cfg(not(test))]
 pub static CLIENT: LazyLock<&Client> = LazyLock::new(|| INNER_CLIENT.get().expect("Client should be initialized before use"));
+#[cfg(test)]
+pub static CLIENT: LazyLock<&Client> = LazyLock::new(|| Box::leak(Box::new(Client::new())));
 static INNER_CLIENT: OnceLock<Client> = OnceLock::new();
 static SERVER_ADDRESS: &str = "0.0.0.0:8080";
 
