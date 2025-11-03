@@ -1,6 +1,7 @@
 # ide files
 .DS_Store
 .idea
+.zed
 *.log
 tmp/
 

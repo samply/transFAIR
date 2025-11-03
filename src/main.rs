@@ -77,35 +77,36 @@ async fn dic_main(config: DicConfig) -> ExitCode {
             error!("Unable to connect to database file {}. Error is: {}", config.database_url.as_str(), e);
             return
         }).unwrap();
-    
+
     let _ = sqlx::migrate!().run(&database_pool).await;
 
     if let Some(ttp) = &config.ttp {
         const RETRY_COUNT: i32 = 30;
-        let mut failures = 0;
-        while !(ttp.check_availability().await) {
-            failures += 1;
-            if failures >= RETRY_COUNT {
-                error!(
-                    "Encountered too many errors -- exiting after {} attempts.",
-                    RETRY_COUNT
+        tokio::spawn(async move {
+            let mut failures = 0;
+            while !(ttp.check_availability().await) {
+                failures += 1;
+                if failures >= RETRY_COUNT {
+                    error!(
+                        "Encountered too many errors -- exiting after {} attempts.",
+                        RETRY_COUNT
+                    );
+                    return;
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                warn!(
+                    "Retrying connection (attempt {}/{})",
+                    failures, RETRY_COUNT
                 );
-                return ExitCode::from(22);
             }
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            warn!(
-                "Retrying connection (attempt {}/{})",
-                failures, RETRY_COUNT
-            );
-        }
-        info!("Connected to ttp {}", ttp.url);
-        // verify that both, the exchange id system and project id system are configured in the ttp
-        for idtype in [&config.exchange_id_system, &ttp.project_id_system] {
-            if !(ttp.check_idtype_available(&idtype).await) {
-                error!("Configured exchange id system '{idtype}' is not available in TTP.");
-                return ExitCode::from(1)
+            info!("Connected to ttp {}", ttp.url);
+            // verify that both, the exchange id system and project id system are configured in the ttp
+            for idtype in [&config.exchange_id_system, &ttp.project_id_system] {
+                if !(ttp.check_idtype_available(&idtype).await) {
+                    error!("Configured exchange id system '{idtype}' is not available in TTP.");
+                }
             }
-        }
+        });
     }
     let state = DicAppState::new(database_pool, config);
     let state_for_fetch = state.clone();
