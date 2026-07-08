@@ -1,23 +1,36 @@
-use std::{process::ExitCode, sync::{LazyLock, OnceLock}, time::Duration};
+use std::{
+    process::ExitCode,
+    sync::{LazyLock, OnceLock},
+    time::Duration,
+};
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use config::DicConfig;
 use fhir::FhirServer;
 use fhir_sdk::r4b::resources::{Bundle, Resource, ResourceType};
+use futures_util::future::TryJoinAll;
 use requests::update_data_request;
 use reqwest::Client;
 use sqlx::{Pool, Sqlite, SqlitePool};
-use futures_util::future::TryJoinAll;
-use tracing::{debug, error, info, trace, warn, Level};
+use tokio::sync::{mpsc, oneshot};
+use tracing::{Level, debug, error, info, trace, warn};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use ttp::Ttp;
 
-use crate::{config::CliArgs, fhir::PatientExt, requests::{create_data_request, get_data_request, list_data_requests}};
+use crate::{
+    config::CliArgs,
+    fhir::PatientExt,
+    requests::{create_data_request, get_data_request, list_data_requests},
+};
 
 mod banner;
 mod config;
+mod dhki;
 mod fhir;
 mod requests;
 mod ttp;
@@ -40,8 +53,14 @@ async fn main() -> ExitCode {
     let args = CliArgs::parse();
     INNER_CLIENT.set(args.build_client()).unwrap();
     match args.subcommand {
-        config::SubCommand::Dic(config) => {
-            dic_main(config).await
+        config::SubCommand::Dic(config) => dic_main(config).await,
+        config::SubCommand::DhkiDkfz(config) => {
+            if let Err(e) = dhki::dhki_main(config).await {
+                eprintln!("{e:#?}");
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
         }
     }
 }
@@ -51,19 +70,25 @@ pub struct DicAppState {
     pub database_pool: Pool<Sqlite>,
     pub config: &'static DicConfig,
     pub request_server: &'static FhirServer,
+    process_tx: mpsc::Sender<oneshot::Sender<anyhow::Result<String>>>,
 }
 
 impl DicAppState {
-    pub fn new(database_pool: Pool<Sqlite>, config: &'static DicConfig) -> Self {
+    pub fn new(
+        database_pool: Pool<Sqlite>,
+        config: &'static DicConfig,
+        process_tx: mpsc::Sender<oneshot::Sender<anyhow::Result<String>>>,
+    ) -> Self {
         let request_server = FhirServer::new(
             config.fhir_request_url.clone(),
-            config.fhir_request_credentials.clone()
+            config.fhir_request_credentials.clone(),
         );
         let request_server = Box::leak(Box::new(request_server));
         Self {
             database_pool,
             config,
             request_server,
+            process_tx,
         }
     }
 }
@@ -108,27 +133,11 @@ async fn dic_main(config: DicConfig) -> ExitCode {
             }
         });
     }
-    let state = DicAppState::new(database_pool, config);
-    let state_for_fetch = state.clone();
-    tokio::spawn(async move {
-        const RETRY_PERIOD: Duration = Duration::from_secs(60);
-        let input_fhir_server =  FhirServer::new(
-            config.fhir_input_url.clone(),
-            config.fhir_input_credentials.clone()
-        );
-        let output_fhir_server =  FhirServer::new(
-            config.fhir_output_url.clone(),
-            config.fhir_output_credentials.clone()
-        );
-        loop {
-            // TODO: Persist the updated data in the database
-            match fetch_data(&input_fhir_server, &output_fhir_server, &state_for_fetch).await {
-                Ok(status) => info!("{}", status),
-                Err(error) => warn!("Failed to fetch project data: {error:#}. Will try again in {}s", RETRY_PERIOD.as_secs())
-            }
-            tokio::time::sleep(RETRY_PERIOD).await;
-        }
-    });
+    let (process_tx, process_rx) = mpsc::channel(16);
+    let state = DicAppState::new(database_pool, config, process_tx);
+    let worker_state = state.clone();
+    let state_for_handler = state.clone();
+    tokio::spawn(process_data_worker(worker_state, process_rx));
 
     // request api endpoint
     let request_routes = Router::new()
@@ -138,7 +147,9 @@ async fn dic_main(config: DicConfig) -> ExitCode {
         .with_state(state);
 
     let app = Router::new()
-        .nest("/requests", request_routes);
+        .nest("/requests", request_routes)
+        .route("/process-data", post(process_data_handler))
+        .with_state(state_for_handler);
 
     let listener = tokio::net::TcpListener::bind(SERVER_ADDRESS).await.unwrap();
     axum::serve(listener, app)
@@ -148,6 +159,64 @@ async fn dic_main(config: DicConfig) -> ExitCode {
     ExitCode::from(0)
 }
 
+async fn process_data_handler(
+    axum::extract::State(state): axum::extract::State<DicAppState>,
+) -> Result<String, (reqwest::StatusCode, String)> {
+    let (response_tx, response_rx) = oneshot::channel();
+    state.process_tx.send(response_tx).await.map_err(|error| {
+        (
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            error.to_string(),
+        )
+    })?;
+    response_rx
+        .await
+        .map_err(|_| {
+            (
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                "Fhir worker crashed".to_string()
+            )
+        })?
+        .map_err(|error| {
+            (
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+            )
+        })
+}
+
+async fn process_data_worker(
+    state: DicAppState,
+    mut commands: mpsc::Receiver<oneshot::Sender<anyhow::Result<String>>>,
+) {
+    const RETRY_PERIOD: Duration = Duration::from_secs(60);
+    let input_fhir_server = FhirServer::new(
+        state.config.fhir_input_url.clone(),
+        state.config.fhir_input_credentials.clone(),
+    );
+    let output_fhir_server = FhirServer::new(
+        state.config.fhir_output_url.clone(),
+        state.config.fhir_output_credentials.clone(),
+    );
+    let mut interval = tokio::time::interval(RETRY_PERIOD);
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+                match fetch_data(&input_fhir_server, &output_fhir_server, &state).await {
+                    Ok(status) => info!("{}", status),
+                    Err(error) => warn!(
+                        "Failed to fetch project data: {error:#}. Will try again in {}s",
+                        RETRY_PERIOD.as_secs()
+                    ),
+                }
+            }
+            Some(response_tx) = commands.recv() => {
+                let _ = response_tx.send(fetch_data(&input_fhir_server, &output_fhir_server, &state).await);
+            }
+            else => break,
+        }
+    }
+}
 
 // Pull data from input_fhir_server and push it to output_fhir_server
 async fn fetch_data(input_fhir_server: &FhirServer, output_fhir_server: &FhirServer, state: &DicAppState) -> anyhow::Result<String> {

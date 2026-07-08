@@ -5,7 +5,7 @@ use fhir_sdk::r4b::{
     resources::{Bundle, BundleEntry, BundleEntryRequest, Patient, Resource},
     types::Identifier,
 };
-use reqwest::{header, StatusCode, Url};
+use reqwest::{StatusCode, Url, header};
 use tracing::debug;
 
 use crate::{config::{Auth, ClientBuilderExt}, requests::DataRequestPayload, CLIENT};
@@ -20,11 +20,8 @@ impl FhirServer {
     pub fn new(url: Url, auth: Auth) -> Self {
         Self { url, auth }
     }
-    
-    pub async fn post_data_request(
-        &self,
-        payload: DataRequestPayload
-    ) -> anyhow::Result<String> {
+
+    pub async fn post_data_request(&self, payload: DataRequestPayload) -> anyhow::Result<String> {
         let bundle_endpoint = format!("{}fhir/Bundle", self.url);
         debug!("Posting request for DIC to {}", self.url);
 
@@ -34,7 +31,7 @@ impl FhirServer {
             .post(bundle_endpoint)
             .add_auth(&self.auth)
             .await?
-            .header(header::CONTENT_TYPE, "application/json+fhir")
+            .header(header::CONTENT_TYPE, "application/fhir+json")
             .json(&bundle)
             .send()
             .await?;

@@ -1,12 +1,19 @@
-use std::{collections::HashMap, fs, path::PathBuf, str::FromStr, sync::LazyLock, time::{Duration, Instant}};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::LazyLock,
+    time::{Duration, Instant},
+};
 
+use anyhow::anyhow;
 use clap::Parser;
 use reqwest::{Certificate, Client, Url};
-use anyhow::anyhow;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use crate::{ttp::Ttp, CLIENT};
+use crate::{CLIENT, ttp::Ttp};
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -48,7 +55,8 @@ impl CliArgs {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum SubCommand {
-    Dic(DicConfig)
+    Dic(DicConfig),
+    DhkiDkfz(crate::dhki::Config),
 }
 
 #[derive(Parser, Clone, Debug)]
