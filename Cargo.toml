@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1"
-axum = "0.8.1"
+axum = { version = "0.8.1", features = ["macros"] }
 chrono = { version = "0.4.37", default-features = false, features = ["serde", "now"] }
 clap = { version = "4.5.3", features = ["env", "derive"] }
 fhir-sdk = { version = "0.15.1", default-features = false, features = ["builders", "r4b"] }

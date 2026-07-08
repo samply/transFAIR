@@ -1,12 +1,18 @@
-use axum::{extract::{Path, State}, Json};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 
-use fhir_sdk::r4b::{resources::{Consent, Patient, ResourceType}, types::Reference};
+use fhir_sdk::r4b::{
+    resources::{Consent, Patient, ResourceType},
+    types::Reference,
+};
 use reqwest::StatusCode;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
-use tracing::{trace, debug, error};
+use tracing::{debug, error, trace};
 
-use crate::{fhir::PatientExt, DicAppState, LinkageError};
+use crate::{DicAppState, LinkageError, fhir::PatientExt};
 
 #[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum RequestStatus {
@@ -33,8 +39,13 @@ pub struct DataRequestPayload {
 
 // POST /requests; Creates a new Data Request
 pub async fn create_data_request(
-    State(DicAppState { database_pool, config, request_server }): State<DicAppState>,
-    Json(payload): Json<DataRequestPayload>
+    State(DicAppState {
+        database_pool,
+        config,
+        request_server,
+        ..
+    }): State<DicAppState>,
+    Json(payload): Json<DataRequestPayload>,
 ) -> axum::response::Result<(StatusCode, Json<DataRequest>)> {
     let consent = payload.consent;
     let mut patient = payload.patient;

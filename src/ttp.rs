@@ -1,5 +1,5 @@
-pub(crate) mod mainzelliste;
 pub mod greifswald;
+pub(crate) mod mainzelliste;
 
 use std::ops::Deref;
 
