@@ -1,0 +1,192 @@
+name: transfair-e2e
+
+configs:
+  callback-mainzelliste-conf:
+    file: ./mainzelliste-callback.conf
+  umm-mainzelliste-conf:
+    file: ../configs/mainzelliste/mainzelliste.conf
+  onkostar-mock-source:
+    content: |
+      package main
+
+      import (
+          "encoding/json"
+          "net/http"
+          "sync/atomic"
+      )
+
+      var calls atomic.Int64
+
+      func main() {
+          http.HandleFunc("/onkostar/remote/importXmlCases", func(w http.ResponseWriter, r *http.Request) {
+              if r.Method != http.MethodPost {
+                  http.Error(w, "method", http.StatusMethodNotAllowed)
+                  return
+              }
+              if err := r.ParseMultipartForm(1 << 20); err != nil {
+                  http.Error(w, err.Error(), http.StatusBadRequest)
+                  return
+              }
+              file, _, err := r.FormFile("document")
+              if err != nil {
+                  http.Error(w, err.Error(), http.StatusBadRequest)
+                  return
+              }
+              file.Close()
+
+              calls.Add(1)
+              _, _ = w.Write([]byte("mock-job-1"))
+          })
+          http.HandleFunc("/calls", func(w http.ResponseWriter, r *http.Request) {
+              _ = json.NewEncoder(w).Encode(map[string]int64{"calls": calls.Load()})
+          })
+          _ = http.ListenAndServe(":8080", nil)
+      }
+
+services:
+  callback-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: mainzelliste
+      POSTGRES_USER: mainzelliste
+      POSTGRES_PASSWORD: mainzelliste
+
+  callback-mainzelliste:
+    image: medicalinformatics/mainzelliste:develop
+    ports: ["18080:8080"]
+    environment:
+      ML_DB_NAME: mainzelliste
+      ML_DB_USER: mainzelliste
+      ML_DB_PASS: mainzelliste
+      ML_API_KEY: pleaseChangeMeToo
+      ML_ALLOWEDREMOTEADDRESSES: 0.0.0.0/0
+      RELAXED_QUERY_CHARS: \|
+    configs:
+      - source: callback-mainzelliste-conf
+        target: /mainzelliste.docker.conf
+    depends_on: [callback-db]
+
+  onkostar-mock:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM golang:1.24-alpine
+        CMD ["go", "run", "/main.go"]
+    configs:
+      - source: onkostar-mock-source
+        target: /main.go
+    ports: ["18088:8080"]
+
+  onkostar-push:
+    image: gcr.io/distroless/cc-debian13:latest
+    entrypoint: ["/usr/local/bin/mainzelliste-onkostar-push"]
+    volumes:
+      - ./bin/mainzelliste-onkostar-push:/usr/local/bin/mainzelliste-onkostar-push:ro
+    environment:
+      LISTEN: 0.0.0.0:8082
+      LOG_LEVEL: debug
+      OBFUSCATE: "false"
+      MLOP_API_KEY: foobar
+      ONKOSTAR_URL: http://onkostar-mock:8080/
+      ONKOSTAR_USER: test
+      ONKOSTAR_PASS: test
+      ML_URL: http://callback-mainzelliste:8080/
+      ML_API_KEY: pleaseChangeMeToo
+      DHKI_TRANSFAIR_URL: http://dhki-transfair:8080/
+      DKFZ_ID_SYSTEM: DKFZ_BK_ID
+    depends_on: [callback-mainzelliste, onkostar-mock, dhki-transfair]
+
+  dhki-transfair:
+    image: gcr.io/distroless/cc-debian13:latest
+    entrypoint: ["/usr/local/bin/transfair"]
+    command: ["dhki-dkfz"]
+    ports: ["18081:8080"]
+    environment:
+      DATABASE_URL: sqlite:///data/dhki.db?mode=rwc
+      BEAM_CONNECT_URL: http://connect1:8062
+      BEAM_CONNECT_APP_ID: app1.proxy1.broker
+      BEAM_CONNECT_API_KEY: App1Secret
+      DKFZ_ID_SYSTEM: DKFZ_BK_ID
+      REMOTE_TRANSFAIR_URL: http://umm-transfair/
+      REMOTE_FHIR_SERVER_URL: http://umm-blaze/
+      REMOTE_EXCHANGE_ID_SYSTEM: SESSION_ID
+      DESTINATION_FHIR_SERVER_URL: http://dhki-blaze:8080/
+    volumes:
+      - dhki-db:/data
+      - ./bin/transfair:/usr/local/bin/transfair:ro
+    networks: [default, beam]
+    depends_on: [dhki-blaze]
+
+  umm-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: mainzelliste
+      POSTGRES_USER: mainzelliste
+      POSTGRES_PASSWORD: mainzelliste
+
+  umm-mainzelliste:
+    image: medicalinformatics/mainzelliste:develop
+    ports: ["18082:8080"]
+    environment:
+      MANDATORY_VARIABLES: ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE
+      ML_DB_NAME: mainzelliste
+      ML_DB_USER: mainzelliste
+      ML_DB_HOST: umm-db
+      ML_DB_PORT: "5432"
+      ML_DB_TYPE: postgresql
+      ML_DB_DRIVER: org.postgresql.Driver
+      ML_DB_PASS: mainzelliste
+      ML_ROUTINE_CONNECTOR_PASSPHRASE: transFAIR-password
+      ML_DIZ_PASSPHRASE: diz-password
+      ML_ALLOWEDREMOTEADDRESSES: 0.0.0.0/0
+      ML_LOG_LEVEL: info
+    configs:
+      - source: umm-mainzelliste-conf
+        target: /mainzelliste.docker.conf
+    depends_on: [umm-db]
+
+  request-blaze:
+    image: samply/blaze:latest
+    ports: ["18084:8080"]
+
+  umm-blaze:
+    image: samply/blaze:latest
+    ports: ["18085:8080"]
+    networks: [default, beam]
+
+  project-blaze:
+    image: samply/blaze:latest
+    ports: ["18086:8080"]
+
+  dhki-blaze:
+    image: samply/blaze:latest
+    ports: ["18087:8080"]
+
+  umm-transfair:
+    image: gcr.io/distroless/cc-debian13:latest
+    entrypoint: ["/usr/local/bin/transfair"]
+    command: ["dic", "mainzelliste"]
+    ports: ["18083:8080"]
+    environment:
+      DATABASE_URL: sqlite:///data/umm.db?mode=rwc
+      EXCHANGE_ID_SYSTEM: SESSION_ID
+      PROJECT_ID_SYSTEM: PROJECT_1_ID
+      TTP_URL: http://umm-mainzelliste:8080/
+      TTP_ML_API_KEY: transFAIR-password
+      FHIR_REQUEST_URL: http://request-blaze:8080/
+      FHIR_INPUT_URL: http://umm-blaze:8080/
+      FHIR_OUTPUT_URL: http://project-blaze:8080/
+    volumes:
+      - umm-transfair-db:/data
+      - ./bin/transfair:/usr/local/bin/transfair:ro
+    networks: [default, beam]
+    depends_on: [umm-mainzelliste, request-blaze, umm-blaze, project-blaze]
+
+networks:
+  beam:
+    external: true
+    name: dev_default
+
+volumes:
+  dhki-db:
+  umm-transfair-db:
