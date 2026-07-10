@@ -10,7 +10,9 @@ docker-compose.override.yml
 
 # build outputs
 /target
+e2e/bin/
 result*
+artifacts
 
 # ignore database
 data_requests.sql
