@@ -388,7 +388,7 @@ mod tests {
             },
             source: "dummy_safe_source".into(),
             epix_domain: "Demo".into(),
-            gpas_domain: "Transferstelle A".into(),
+            gpas_domain: "demo.study.demo-mii".into(),
         };
         dbg!(ttp.request_project_pseudonym(fake_patient(), "test")
             .await
