@@ -1,5 +1,8 @@
 //! Client implementation for Mainzelliste TTP
-use fhir_sdk::r4b::resources::{Consent, IdentifiableResource, Patient};
+use fhir_sdk::r4b::{
+    resources::{Consent, Patient},
+    types::Reference,
+};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
@@ -179,15 +182,13 @@ impl MlConfig {
             ));
         }
 
-        // TODO: Needs to be done outside of mainzelliste.rs
-        let mut consent_with_identifiers = consent.clone(); 
-        // TODO: Mainzelliste currently says the identifier don't have a proper system, maybe need to add the URL?
-        consent_with_identifiers.set_identifier(patient.identifier.clone());
+        let mut consent_with_identifiers = consent.clone();
+        consent_with_identifiers.patient = Some(self.patient_reference(patient)?);
 
         trace!("{:?}", consent_with_identifiers);
 
-        let session = self.create_mainzelliste_session().await?; 
-        
+        let session = self.create_mainzelliste_session().await?;
+
         let token = self.create_mainzelliste_token(session, TokenType::AddConsent).await?;
 
         let consent_endpoint = self.url.join("fhir/Consent").unwrap();
@@ -202,15 +203,34 @@ impl MlConfig {
             .map_err(|err| {
                 warn!("Unable to add Consent to TTP: {}", err);
                 (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                    StatusCode::BAD_GATEWAY,
                     "Failed to add Consent to TTP",
-                );
-            })
-            .unwrap();
+                )
+            })?;
 
-        debug!("Response from TTP for Consent request: status={} text={}", response.status(), response.text().await.unwrap());
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            warn!("Mainzelliste rejected the consent: status={status} text={text}");
+            return Err((StatusCode::BAD_GATEWAY, "Mainzelliste rejected the consent"));
+        }
+        debug!("Response from TTP for Consent request: status={status} text={text}");
 
         Ok(())
+    }
+
+    /// Reference to the patient by its project pseudonym, as Mainzelliste expects it on a Consent.
+    fn patient_reference(&self, patient: &Patient) -> Result<Reference, (StatusCode, &'static str)> {
+        let mut identifier = patient
+            .get_identifier(&self.project_id_system)
+            .cloned()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Patient has no project pseudonym to link the consent to"))?;
+        // Mainzelliste only accepts absolute identifier systems of the form <mainzelliste url>/id/<id type>.
+        identifier.system = Some(self.url.join(&format!("id/{}", self.project_id_system)).unwrap().to_string());
+        Reference::builder()
+            .identifier(identifier)
+            .build()
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to build patient reference for consent"))
     }
 }
 
