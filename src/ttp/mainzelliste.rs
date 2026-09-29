@@ -1,6 +1,6 @@
 //! Client implementation for Mainzelliste TTP
 use fhir_sdk::r4b::{
-    resources::{Consent, Patient},
+    resources::{Consent, ConsentPolicy, Patient},
     types::Reference,
 };
 use reqwest::StatusCode;
@@ -21,6 +21,11 @@ pub struct MlConfig {
         env = "TTP_ML_API_KEY"
     )]
     pub api_key: String,
+
+    /// Identifier of the Mainzelliste consent template (Questionnaire) to document received consents against,
+    /// for consents that reference a template of another TTP.
+    #[clap(long = "ttp-ml-consent-template", env = "TTP_ML_CONSENT_TEMPLATE")]
+    pub consent_template: Option<String>,
 }
 
 impl std::ops::Deref for MlConfig {
@@ -184,6 +189,14 @@ impl MlConfig {
 
         let mut consent_with_identifiers = consent.clone();
         consent_with_identifiers.patient = Some(self.patient_reference(patient)?);
+        if let Some(template) = &self.consent_template {
+            let questionnaire_id = self.find_consent_template(template).await?;
+            let policy = ConsentPolicy::builder()
+                .uri(format!("fhir/Questionnaire/{questionnaire_id}"))
+                .build()
+                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to build consent policy"))?;
+            consent_with_identifiers.policy = vec![Some(policy)];
+        }
 
         trace!("{:?}", consent_with_identifiers);
 
@@ -219,6 +232,45 @@ impl MlConfig {
         Ok(())
     }
 
+    /// Id of the Questionnaire whose identifier matches `template`.
+    async fn find_consent_template(&self, template: &str) -> Result<String, (StatusCode, &'static str)> {
+        let session = self.create_mainzelliste_session().await?;
+        let token = self.create_mainzelliste_token(session, TokenType::SearchConsentTemplates).await?;
+        let questionnaires = CLIENT
+            .get(self.url.join("fhir/Questionnaire").unwrap())
+            .header("Authorization", format!("MainzellisteToken {}", token.id))
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+            .map_err(|err| {
+                warn!("Unable to search consent templates in TTP: {err}");
+                (StatusCode::BAD_GATEWAY, "Unable to search consent templates in TTP")
+            })?
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|err| {
+                warn!("Unable to parse consent templates from TTP: {err}");
+                (StatusCode::BAD_GATEWAY, "Unable to parse consent templates from TTP")
+            })?;
+        // Mainzelliste ignores the identifier search parameter, so filter here.
+        questionnaires["entry"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|entry| &entry["resource"])
+            .find(|resource| {
+                resource["identifier"]
+                    .as_array()
+                    .is_some_and(|ids| ids.iter().any(|id| id["value"].as_str() == Some(template)))
+            })
+            .and_then(|resource| resource["id"].as_str())
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                warn!("TTP has no consent template with identifier {template}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Configured consent template not found in TTP")
+            })
+    }
+
     /// Reference to the patient by its project pseudonym, as Mainzelliste expects it on a Consent.
     fn patient_reference(&self, patient: &Patient) -> Result<Reference, (StatusCode, &'static str)> {
         let mut identifier = patient
@@ -238,7 +290,8 @@ impl MlConfig {
 #[serde(rename_all="camelCase")]
 enum TokenType {
     // #[serde(with = "TokenType")] 
-    AddConsent
+    AddConsent,
+    SearchConsentTemplates,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
