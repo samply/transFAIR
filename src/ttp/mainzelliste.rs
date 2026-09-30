@@ -26,6 +26,25 @@ pub struct MlConfig {
     /// for consents that reference a template of another TTP.
     #[clap(long = "ttp-ml-consent-template", env = "TTP_ML_CONSENT_TEMPLATE")]
     pub consent_template: Option<String>,
+
+    /// Renames patient identifier systems before the patient is sent to Mainzelliste,
+    /// as comma-separated `from=to` pairs, e.g. `KIS_ID=sapExtId`
+    #[clap(
+        long = "ttp-ml-id-mapping",
+        env = "TTP_ML_ID_MAPPING",
+        value_delimiter = ',',
+        value_parser = parse_id_mapping,
+    )]
+    pub id_mapping: Vec<(String, String)>,
+}
+
+fn parse_id_mapping(pair: &str) -> Result<(String, String), String> {
+    match pair.split_once('=') {
+        Some((from, to)) if !from.trim().is_empty() && !to.trim().is_empty() => {
+            Ok((from.trim().to_owned(), to.trim().to_owned()))
+        }
+        _ => Err(format!("expected `from=to`, got `{pair}`")),
+    }
 }
 
 impl std::ops::Deref for MlConfig {
@@ -103,9 +122,18 @@ impl MlConfig {
 
     pub(super) async fn request_project_pseudonym(
         &self,
-        patient: Patient,
+        mut patient: Patient,
         exchange_id_system: &str,
     ) -> Result<Patient, TtpError> {
+        for identifier in patient.identifier.iter_mut().flatten() {
+            if let Some((_, to)) = self
+                .id_mapping
+                .iter()
+                .find(|(from, _)| identifier.system.as_deref() == Some(from.as_str()))
+            {
+                identifier.system = Some(to.clone());
+            }
+        }
         let patient = patient
           .add_id_request(exchange_id_system.to_owned())
           .add_id_request(self.project_id_system.clone());
