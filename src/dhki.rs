@@ -45,13 +45,14 @@ struct AppState {
     db: SqlitePool,
     bc_client: reqwest::Client,
     destination: FhirServer,
-    process_tx: mpsc::Sender<oneshot::Sender<anyhow::Result<usize>>>,
+    process_tx: mpsc::Sender<oneshot::Sender<anyhow::Result<ProcessResult>>>,
     config: &'static Config,
 }
 
 #[derive(Debug, Serialize)]
 struct ProcessResult {
     processed: usize,
+    failed: usize,
 }
 
 pub async fn dhki_main(config: Config) -> anyhow::Result<()> {
@@ -182,13 +183,13 @@ async fn process_pending_handler(
     response_rx
         .await
         .map_err(internal_error)?
-        .map(|processed| Json(ProcessResult { processed }))
+        .map(Json)
         .map_err(internal_error)
 }
 
 async fn process_worker(
     state: AppState,
-    mut commands: mpsc::Receiver<oneshot::Sender<anyhow::Result<usize>>>,
+    mut commands: mpsc::Receiver<oneshot::Sender<anyhow::Result<ProcessResult>>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_hours(1));
     loop {
@@ -206,83 +207,115 @@ async fn process_worker(
     }
 }
 
-async fn check_pending(state: &AppState) -> anyhow::Result<usize> {
+async fn check_pending(state: &AppState) -> anyhow::Result<ProcessResult> {
     let requests: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT data_request_id, dkfz_id, exchange_id FROM pending_linkage_requests",
     )
     .fetch_all(&state.db)
     .await?;
-    let mut processed = 0;
+    let mut result = ProcessResult {
+        processed: 0,
+        failed: 0,
+    };
+    let pending = requests.len();
+    // A request that cannot be checked must not block the others.
     for (request_id, dkfz_id, exchange_id) in requests {
-        let status_url = state
-            .config
-            .remote_transfair_url
-            .join(&format!("requests/{request_id}"))?;
-        let request = state
-            .bc_client
-            .get(status_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<DataRequest>()
-            .await?;
-        match request.status {
-            RequestStatus::Created => continue,
-            RequestStatus::Error => {
-                tracing::warn!(
-                    "Request {request_id} failed: {}",
-                    request.message.as_deref().unwrap_or("unknown reason")
-                );
-                continue;
+        match process_request(state, &request_id, &dkfz_id, &exchange_id).await {
+            Ok(true) => {
+                tracing::info!("Loaded the response of linkage request {request_id}");
+                result.processed += 1;
             }
-            RequestStatus::Success => {}
+            Ok(false) => {}
+            Err(error) => {
+                tracing::error!("Failed to process linkage request {request_id}: {error:#}");
+                result.failed += 1;
+            }
         }
-
-        let mut search_url = state.config.remote_fhir_server_url.join("fhir/Bundle")?;
-        search_url
-            .query_pairs_mut()
-            .append_pair("identifier", &format!("DATAREQUEST_ID|{request_id}"));
-        let mut search_result = state
-            .bc_client
-            .get(search_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Bundle>()
-            .await?;
-        let mut bundles = std::mem::take(&mut search_result.entry)
-            .into_iter()
-            .flatten()
-            .filter_map(|entry| match entry.resource {
-                Some(Resource::Bundle(bundle)) => Some(bundle),
-                _ => None,
-            });
-        let mut bundle = bundles
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("No response bundle found for {request_id}"))?;
-        anyhow::ensure!(
-            bundles.next().is_none(),
-            "Multiple response bundles found for {request_id}"
-        );
-        replace_identifier(
-            &mut bundle,
-            &state.config.remote_exchange_id_system,
-            &exchange_id,
-            &state.config.dkfz_id_system,
-            &dkfz_id,
-        )?;
-        state
-            .destination
-            .post_data(&bundle)
-            .await?
-            .error_for_status()?;
-        sqlx::query("DELETE FROM pending_linkage_requests WHERE data_request_id = ?1")
-            .bind(&request_id)
-            .execute(&state.db)
-            .await?;
-        processed += 1;
     }
-    Ok(processed)
+    tracing::info!(
+        "Checked {pending} pending linkage requests: {} processed, {} failed, {} still waiting",
+        result.processed,
+        result.failed,
+        pending - result.processed - result.failed
+    );
+    Ok(result)
+}
+
+/// Loads the response of a finished linkage request into the destination store.
+/// Returns whether the request was finished and removed from the pending list.
+async fn process_request(
+    state: &AppState,
+    request_id: &str,
+    dkfz_id: &str,
+    exchange_id: &str,
+) -> anyhow::Result<bool> {
+    let status_url = state
+        .config
+        .remote_transfair_url
+        .join(&format!("requests/{request_id}"))?;
+    let request = state
+        .bc_client
+        .get(status_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<DataRequest>()
+        .await?;
+    match request.status {
+        RequestStatus::Created => return Ok(false),
+        RequestStatus::Error => {
+            tracing::warn!(
+                "Request {request_id} failed: {}",
+                request.message.as_deref().unwrap_or("unknown reason")
+            );
+            return Ok(false);
+        }
+        RequestStatus::Success => {}
+    }
+
+    let mut search_url = state.config.remote_fhir_server_url.join("fhir/Bundle")?;
+    search_url
+        .query_pairs_mut()
+        .append_pair("identifier", &format!("DATAREQUEST_ID|{request_id}"));
+    let mut search_result = state
+        .bc_client
+        .get(search_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Bundle>()
+        .await?;
+    let mut bundles = std::mem::take(&mut search_result.entry)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| match entry.resource {
+            Some(Resource::Bundle(bundle)) => Some(bundle),
+            _ => None,
+        });
+    let mut bundle = bundles
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No response bundle found for {request_id}"))?;
+    anyhow::ensure!(
+        bundles.next().is_none(),
+        "Multiple response bundles found for {request_id}"
+    );
+    replace_identifier(
+        &mut bundle,
+        &state.config.remote_exchange_id_system,
+        exchange_id,
+        &state.config.dkfz_id_system,
+        dkfz_id,
+    )?;
+    state
+        .destination
+        .post_data(&bundle)
+        .await?
+        .error_for_status()?;
+    sqlx::query("DELETE FROM pending_linkage_requests WHERE data_request_id = ?1")
+        .bind(request_id)
+        .execute(&state.db)
+        .await?;
+    Ok(true)
 }
 
 fn replace_identifier(
