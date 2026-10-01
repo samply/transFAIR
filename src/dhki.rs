@@ -14,6 +14,7 @@ use crate::{
     SERVER_ADDRESS, config,
     fhir::FhirServer,
     requests::{DataRequest, DataRequestPayload, RequestStatus},
+    ttp::mainzelliste::MlConfig,
 };
 
 #[derive(Debug, clap::Args)]
@@ -38,6 +39,10 @@ pub struct Config {
     destination_fhir_server_url: Url,
     #[clap(long, env, default_value = "")]
     destination_fhir_server_auth: config::Auth,
+    /// Local Mainzelliste that stores the project pseudonym the remote site assigns to a linked
+    /// patient, as external ID PROJECT_ID_SYSTEM next to the patient's DKFZ_ID_SYSTEM ID
+    #[clap(flatten)]
+    ttp: MlConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +172,31 @@ async fn register_linkage_request(
     .execute(&state.db)
     .await
     .map_err(internal_error)?;
+
+    // The linkage itself already succeeded remotely, so a failure here is only logged.
+    if let Some(project_id) = &response.project_id {
+        let ttp = &state.config.ttp;
+        match ttp
+            .add_external_id(
+                &state.config.dkfz_id_system,
+                &dkfz_id,
+                &ttp.project_id_system,
+                project_id,
+            )
+            .await
+        {
+            Ok(()) => tracing::info!(
+                "Stored the {} of linkage request {} in the TTP",
+                ttp.project_id_system,
+                response.id
+            ),
+            Err(error) => tracing::error!(
+                "Failed to store the {} of linkage request {} in the TTP: {error:#}",
+                ttp.project_id_system,
+                response.id
+            ),
+        }
+    }
 
     Ok((StatusCode::CREATED, Json(response)))
 }
