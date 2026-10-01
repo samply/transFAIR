@@ -166,8 +166,7 @@ impl MlConfig {
             .header("mainzellisteApiKey", &self.api_key)
             .send()
             .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create mainzelliste session. Ensure configured apiKey is valid."))
-            .unwrap()
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create mainzelliste session. Ensure configured apiKey is valid."))?
             .json::<Session>()
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Unable to parse mainzelliste session."))
@@ -176,21 +175,17 @@ impl MlConfig {
     async fn create_mainzelliste_token(&self, session: Session, token_type: TokenType) -> Result<Token, (StatusCode, &'static str)> {
         debug!("create_mainzelliste_token called with: session={:?} token_type={:?}", session, token_type);
         let tokens_endpoint = format!("{}tokens", session.uri);
-        debug!("Requesting addConsent Token from Mainzelliste: {}", tokens_endpoint);
-        let token_request = TokenRequest {
-            token_type
-        };
+        debug!("Requesting {:?} token from Mainzelliste: {}", token_type, tokens_endpoint);
         CLIENT
             .post(tokens_endpoint)
             .header("mainzellisteApiKey", &self.api_key)
-            .json(&token_request)
+            .json(&token_type)
             .send()
             .await
             .map_err(|err| {
                 warn!("Unable to get token from mainzelliste: {}", err);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Unable to get Token from Mainzelliste")
-            })
-            .unwrap()
+            })?
             .json::<Token>()
             .await
             .map_err(|err| {
@@ -299,6 +294,41 @@ impl MlConfig {
             })
     }
 
+    /// Stores `value` as the external ID `id_type` of the patient whose ID `known_type` is `known_value`.
+    pub async fn add_external_id(
+        &self,
+        known_type: &str,
+        known_value: &str,
+        id_type: &str,
+        value: &str,
+    ) -> anyhow::Result<()> {
+        let session = self.create_mainzelliste_session().await.map_err(|(_, e)| anyhow::anyhow!(e))?;
+        let token_type = TokenType::EditPatient {
+            patient_id: MlId {
+                id_type: known_type.to_owned(),
+                id_string: known_value.to_owned(),
+            },
+            ids: vec![id_type.to_owned()],
+        };
+        let token = self
+            .create_mainzelliste_token(session, token_type)
+            .await
+            .map_err(|(_, e)| anyhow::anyhow!(e))?;
+        let response = CLIENT
+            .put(self.url.join(&format!("patients/tokenId/{}", token.id))?)
+            .json(&serde_json::Map::from_iter([(id_type.to_owned(), value.into())]))
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            anyhow::bail!(
+                "Mainzelliste rejected {id_type} with {status}: {}",
+                response.text().await.unwrap_or_default()
+            );
+        }
+        Ok(())
+    }
+
     /// Reference to the patient by its project pseudonym, as Mainzelliste expects it on a Consent.
     fn patient_reference(&self, patient: &Patient) -> Result<Reference, (StatusCode, &'static str)> {
         let mut identifier = patient
@@ -314,12 +344,21 @@ impl MlConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all="camelCase")]
+/// Token request body: `{"type": ..., "data": {...}}`, without `data` for variants that take none.
+#[derive(Serialize, Debug)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum TokenType {
-    // #[serde(with = "TokenType")] 
     AddConsent,
     SearchConsentTemplates,
+    /// Allows changing the listed external IDs of the patient with ID `patient_id`.
+    EditPatient { patient_id: MlId, ids: Vec<String> },
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct MlId {
+    id_type: String,
+    id_string: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -328,13 +367,34 @@ struct Token {
     id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct TokenRequest {
-    #[serde(rename = "type")]
-    token_type: TokenType
-}
-
 #[derive(Deserialize, Debug)]
 struct Session {
     uri: String 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MlId, TokenType};
+
+    #[test]
+    fn serializes_token_requests() {
+        assert_eq!(
+            serde_json::to_value(TokenType::AddConsent).unwrap(),
+            serde_json::json!({"type": "addConsent"})
+        );
+        let edit = TokenType::EditPatient {
+            patient_id: MlId {
+                id_type: "DKFZ_BK_ID".into(),
+                id_string: "MWAG8HZ1".into(),
+            },
+            ids: vec!["dhkiComId".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(edit).unwrap(),
+            serde_json::json!({
+                "type": "editPatient",
+                "data": {"patientId": {"idType": "DKFZ_BK_ID", "idString": "MWAG8HZ1"}, "ids": ["dhkiComId"]},
+            })
+        );
+    }
 }
