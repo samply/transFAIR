@@ -12,13 +12,14 @@ services:
       - 8082:8080
     environment:
       # Otherwise mainzelliste will request ML_API_KEY
-      MANDATORY_VARIABLES: "ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE"
+      MANDATORY_VARIABLES: "ML_DB_PASS ML_ROUTINE_CONNECTOR_PASSPHRASE ML_DIZ_PASSPHRASE ML_ADMIN_PASSPHRASE"
       ML_DB_NAME: mainzelliste
       ML_DB_USER: mainzelliste
       ML_DB_HOST: mainzelliste-db
       ML_DB_PASS: "${ML_DB_PASS:-my-secret-db-password}"
       ML_ROUTINE_CONNECTOR_PASSPHRASE: "${ML_ROUTINE_CONNECTOR_PASSPHRASE:-transFAIR-password}"
       ML_DIZ_PASSPHRASE: "${ML_DIZ_PASSPHRASE:-diz-password}"
+      ML_ADMIN_PASSPHRASE: "${ML_ADMIN_PASSPHRASE:-admin-password}"
       ML_LOG_LEVEL: "${ML_LOG_LEVEL:-info}"
     configs:
       - mainzelliste.docker.conf

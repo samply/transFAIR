@@ -15,6 +15,7 @@ function start_bg() {
   export FHIR_INPUT_URL="http://localhost:8086"
   export FHIR_OUTPUT_URL="http://localhost:8095"
   export EXCHANGE_ID_SYSTEM="SESSION_ID"
+  export TTP_ML_CONSENT_TEMPLATE="Mii-Broad-Consent"
   export DATABASE_URL="sqlite://data_requests.sql?mode=rwc"
   export RUST_LOG="info,routine_connector=debug"
   docker compose up -d --no-build --no-recreate
@@ -39,6 +40,12 @@ function start_bg() {
       fi
     done
   done
+  for _ in $(seq 1 300); do
+    curl -sf -o /dev/null "$TTP_URL" && break
+    echo "Waiting for mainzelliste on $TTP_URL ..."
+    sleep 1
+  done
+  $SD/consent-template.sh "$TTP_URL"
   chmod +x artifacts/binaries-amd64/transfair
   artifacts/binaries-amd64/transfair dic mainzelliste &
   sleep 10
