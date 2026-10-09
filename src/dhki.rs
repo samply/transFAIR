@@ -149,15 +149,20 @@ async fn register_linkage_request(
         .remote_transfair_url
         .join("requests")
         .map_err(internal_error)?;
-    let response = state
+    let res = state
         .bc_client
         .post(remote_request)
         .json(&payload)
         .send()
         .await
-        .map_err(bad_gateway)?
-        .error_for_status()
-        .map_err(bad_gateway)?
+        .map_err(bad_gateway)?;
+    if let Err(e) = res.error_for_status_ref() {
+        return Err(bad_gateway(format!(
+            "Request to umm failed: {e:#?}\nBody: {}",
+            res.text().await.map_err(bad_gateway)?
+        )));
+    }
+    let response = res
         .json::<DataRequest>()
         .await
         .map_err(bad_gateway)?;
