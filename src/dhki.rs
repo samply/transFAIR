@@ -341,6 +341,11 @@ async fn process_request(
         &state.config.dkfz_id_system,
         dkfz_id,
     )?;
+    let gender = link_to_patient(&mut bundle, &state.config.dkfz_id_system, dkfz_id)?;
+    state
+        .destination
+        .upsert_patient(&state.config.dkfz_id_system, dkfz_id, gender.as_deref())
+        .await?;
     state
         .destination
         .post_data(&bundle)
@@ -400,6 +405,66 @@ fn replace_identifier(
     Ok(())
 }
 
+/// Drops the Patient resources of the bundle and points every reference to them, or to the patient
+/// by its DKFZ ID, at `Patient/<DKFZ ID>`, the patient the research db loader maintains.
+/// Returns the gender of the dropped Patients, which the research db loader does not know.
+fn link_to_patient(
+    bundle: &mut Bundle,
+    dkfz_id_system: &str,
+    dkfz_id: &str,
+) -> anyhow::Result<Option<String>> {
+    fn visit(value: &mut serde_json::Value, patients: &[String], system: &str, id: &str) {
+        match value {
+            serde_json::Value::Object(object) => {
+                let identifies_patient = object.get("identifier").is_some_and(|identifier| {
+                    identifier.get("system").and_then(|value| value.as_str()) == Some(system)
+                        && identifier.get("value").and_then(|value| value.as_str()) == Some(id)
+                });
+                let references_patient = object
+                    .get("reference")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|reference| patients.iter().any(|patient| patient == reference));
+                if identifies_patient || references_patient {
+                    object.insert("reference".into(), format!("Patient/{id}").into());
+                }
+                for value in object.values_mut() {
+                    visit(value, patients, system, id);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    visit(value, patients, system, id);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut value = serde_json::to_value(&*bundle)?;
+    let mut patients = Vec::new();
+    let mut gender = None;
+    if let Some(entries) = value.get_mut("entry").and_then(|entries| entries.as_array_mut()) {
+        entries.retain(|entry| {
+            if entry["resource"]["resourceType"] != "Patient" {
+                return true;
+            }
+            if let Some(id) = entry["resource"]["id"].as_str() {
+                patients.push(format!("Patient/{id}"));
+            }
+            if let Some(full_url) = entry["fullUrl"].as_str() {
+                patients.push(full_url.to_owned());
+            }
+            if let Some(dic_gender) = entry["resource"]["gender"].as_str() {
+                gender = Some(dic_gender.to_owned());
+            }
+            false
+        });
+    }
+    visit(&mut value, &patients, dkfz_id_system, dkfz_id);
+    *bundle = serde_json::from_value(value)?;
+    Ok(gender)
+}
+
 fn internal_error(error: impl std::fmt::Display) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
 }
@@ -410,7 +475,7 @@ fn bad_gateway(error: impl std::fmt::Display) -> (StatusCode, String) {
 
 #[cfg(test)]
 mod tests {
-    use super::replace_identifier;
+    use super::{link_to_patient, replace_identifier};
     use fhir_sdk::r4b::resources::Bundle;
 
     #[test]
@@ -435,5 +500,50 @@ mod tests {
             value["entry"][0]["resource"]["subject"]["identifier"],
             serde_json::json!({"system": "DKFZ_BK_ID", "value": "bk-1"})
         );
+    }
+
+    #[test]
+    fn links_resources_to_the_research_db_patient() {
+        let mut bundle: Bundle = serde_json::from_value(serde_json::json!({
+            "resourceType": "Bundle",
+            "type": "transaction",
+            "entry": [{
+                "fullUrl": "urn:uuid:4f5c7c3e-0c1a-4d8e-9a5e-2f1f3c6b7d80",
+                "resource": {"resourceType": "Patient", "id": "dic-1", "gender": "female"},
+                "request": {"method": "PUT", "url": "Patient/dic-1"}
+            }, {
+                "resource": {
+                    "resourceType": "Condition",
+                    "id": "c-1",
+                    "subject": {"identifier": {"system": "DKFZ_BK_ID", "value": "bk-1"}}
+                },
+                "request": {"method": "PUT", "url": "Condition/c-1"}
+            }, {
+                "resource": {
+                    "resourceType": "Procedure",
+                    "id": "p-1",
+                    "status": "completed",
+                    "subject": {"reference": "urn:uuid:4f5c7c3e-0c1a-4d8e-9a5e-2f1f3c6b7d80"},
+                    "reasonReference": [{"reference": "Condition/c-1"}]
+                },
+                "request": {"method": "PUT", "url": "Procedure/p-1"}
+            }]
+        }))
+        .unwrap();
+
+        let gender = link_to_patient(&mut bundle, "DKFZ_BK_ID", "bk-1").unwrap();
+        assert_eq!(gender.as_deref(), Some("female"));
+        let value = serde_json::to_value(bundle).unwrap();
+        let entries = value["entry"].as_array().unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries[0]["resource"]["subject"],
+            serde_json::json!({
+                "reference": "Patient/bk-1",
+                "identifier": {"system": "DKFZ_BK_ID", "value": "bk-1"}
+            })
+        );
+        assert_eq!(entries[1]["resource"]["subject"]["reference"], "Patient/bk-1");
+        assert_eq!(entries[1]["resource"]["reasonReference"][0]["reference"], "Condition/c-1");
     }
 }
