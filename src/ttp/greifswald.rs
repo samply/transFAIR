@@ -378,6 +378,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "flaky in CI"]
     async fn test_request_project_pseudonym() {
         let ttp = GreifswaldConfig {
             gpas_url: "https://demo.ths-greifswald.de".parse().unwrap(),
