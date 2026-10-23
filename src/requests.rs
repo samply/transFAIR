@@ -10,7 +10,7 @@ use fhir_sdk::r4b::{
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
 
 use crate::{DicAppState, LinkageError, fhir::PatientExt};
 
@@ -58,7 +58,9 @@ pub async fn create_data_request(
         // now, the patient should have project1id data (which can be stored in the DB)
         trace!("TTP Returned these patient with project pseudonym {:#?}", &patient);
         if let Some(ref consent) = consent {
-            ttp.document_patient_consent(consent, &patient).await?;
+            if let Err((_, err)) = ttp.document_patient_consent(consent, &patient).await {
+                warn!("Failed to document patient consent: {err}");
+            }
         }
         trace!("TTP returned this consent for Patient {:?}", consent);
 

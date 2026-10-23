@@ -237,7 +237,7 @@ impl MlConfig {
             .send()
             .await
             .map_err(|err| {
-                warn!("Unable to add Consent to TTP: {}", err);
+                warn!("Unable to add Consent to TTP: {err:#?}");
                 (
                     StatusCode::BAD_GATEWAY,
                     "Failed to add Consent to TTP",
