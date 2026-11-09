@@ -232,4 +232,26 @@ read -r status THIRD_ID < <(request_linkage)
 [[ $(umm_consents) == 1 ]]
 [[ $(curl --fail --silent http://localhost:18083/requests | jq -c '[.[].project_id] | unique') == "[\"$PROJECT_ID\"]" ]]
 
+echo "Loading the new response over older data of the patient..."
+# dhki_put PATH JSON: writes a resource to the DHKI Blaze, as the research db loader does.
+dhki_put() {
+  curl --fail-with-body --silent --show-error -X PUT "http://localhost:18087/fhir/$1" \
+    -H 'Content-Type: application/fhir+json' --data-binary "$2" >/dev/null
+}
+dhki_put Observation/etl-1 "{\"resourceType\": \"Observation\", \"id\": \"etl-1\", \"status\": \"final\",
+  \"code\": {\"text\": \"loader\"}, \"subject\": {\"reference\": \"Patient/$BK_ID\"}}"
+dhki_put Patient/other '{"resourceType": "Patient", "id": "other"}'
+dhki_put Observation/etl-2 '{"resourceType": "Observation", "id": "etl-2", "status": "final",
+  "code": {"text": "loader"}, "subject": {"reference": "Patient/other"}}'
+deliver_response "$THIRD_ID"
+curl --fail-with-body --silent --show-error -X POST http://localhost:18081/process-pending > "$TMP/process.json"
+[[ $(jq -r .processed "$TMP/process.json") == 1 ]]
+for type in Condition Procedure; do
+  [[ $(curl --fail --silent "http://localhost:18087/fhir/$type?subject=Patient/$BK_ID&_summary=count" | jq .total) == 1 ]]
+done
+[[ $(curl --silent -o /dev/null -w '%{http_code}' http://localhost:18087/fhir/Observation/etl-1) == 410 ]]
+[[ $(curl --silent -o /dev/null -w '%{http_code}' http://localhost:18087/fhir/Observation/etl-2) == 200 ]]
+curl --fail --silent "http://localhost:18087/fhir/Patient/$BK_ID" \
+  | jq -e --arg bk "$BK_ID" '.identifier == [{system: "DKFZ_BK_ID", value: $bk}]' >/dev/null
+
 echo "E2E passed: request $REQUEST_ID loaded into DHKI Blaze under BK ID $BK_ID."

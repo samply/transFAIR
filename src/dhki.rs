@@ -395,7 +395,7 @@ async fn process_request(
     let gender = link_to_patient(&mut bundle, &state.config.dkfz_id_system, dkfz_id)?;
     state
         .destination
-        .upsert_patient(&state.config.dkfz_id_system, dkfz_id, gender.as_deref())
+        .replace_patient(&state.config.dkfz_id_system, dkfz_id, gender.as_deref())
         .await?;
     state
         .destination
