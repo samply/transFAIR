@@ -8,7 +8,8 @@ use fhir_sdk::r4b::resources::{Bundle, Resource};
 use reqwest::{Proxy, Url};
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tokio::sync::{mpsc, oneshot};
+use std::sync::Arc;
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 use crate::{
     SERVER_ADDRESS, config,
@@ -51,6 +52,8 @@ struct AppState {
     bc_client: reqwest::Client,
     destination: FhirServer,
     process_tx: mpsc::Sender<oneshot::Sender<anyhow::Result<ProcessResult>>>,
+    /// Serializes linkage requests, so a patient sent twice at once is requested only once.
+    linkage_lock: Arc<Mutex<()>>,
     config: &'static Config,
 }
 
@@ -87,6 +90,7 @@ pub async fn dhki_main(config: Config) -> anyhow::Result<()> {
             config.destination_fhir_server_auth.clone(),
         ),
         process_tx,
+        linkage_lock: Arc::default(),
         config,
     };
     let worker_state = state.clone();
@@ -143,6 +147,15 @@ async fn register_linkage_request(
         ));
     }
     consent.patient = None;
+
+    let _linkage_guard = state.linkage_lock.lock().await;
+    if let Some(request) = pending_request(&state, &dkfz_id).await? {
+        tracing::info!(
+            "Patient is already pending in linkage request {}",
+            request.id
+        );
+        return Ok((StatusCode::OK, Json(request)));
+    }
 
     let remote_request = state
         .config
@@ -204,6 +217,55 @@ async fn register_linkage_request(
     }
 
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// The patient's pending linkage request, unless the remote site failed it.
+/// A failed request is dropped, so that the patient is requested again.
+async fn pending_request(
+    state: &AppState,
+    dkfz_id: &str,
+) -> Result<Option<DataRequest>, (StatusCode, String)> {
+    let request_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT data_request_id FROM pending_linkage_requests WHERE dkfz_id = ?1",
+    )
+    .bind(dkfz_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(internal_error)?;
+    for request_id in request_ids {
+        let request = remote_request(state, &request_id)
+            .await
+            .map_err(|error| bad_gateway(format!("{error:#}")))?;
+        if !matches!(request.status, RequestStatus::Error) {
+            return Ok(Some(request));
+        }
+        tracing::info!(
+            "Requesting the linkage again, as request {request_id} failed: {}",
+            request.message.as_deref().unwrap_or("unknown reason")
+        );
+        sqlx::query("DELETE FROM pending_linkage_requests WHERE data_request_id = ?1")
+            .bind(&request_id)
+            .execute(&state.db)
+            .await
+            .map_err(internal_error)?;
+    }
+    Ok(None)
+}
+
+/// The linkage request as the remote site currently sees it.
+async fn remote_request(state: &AppState, request_id: &str) -> anyhow::Result<DataRequest> {
+    let status_url = state
+        .config
+        .remote_transfair_url
+        .join(&format!("requests/{request_id}"))?;
+    Ok(state
+        .bc_client
+        .get(status_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<DataRequest>()
+        .await?)
 }
 
 async fn process_pending_handler(
@@ -284,18 +346,7 @@ async fn process_request(
     dkfz_id: &str,
     exchange_id: &str,
 ) -> anyhow::Result<bool> {
-    let status_url = state
-        .config
-        .remote_transfair_url
-        .join(&format!("requests/{request_id}"))?;
-    let request = state
-        .bc_client
-        .get(status_url)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<DataRequest>()
-        .await?;
+    let request = remote_request(state, request_id).await?;
     match request.status {
         RequestStatus::Created => return Ok(false),
         RequestStatus::Error => {

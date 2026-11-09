@@ -145,21 +145,42 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 REQUEST_ID=$(jq -er '.[0].id' "$TMP/requests.json")
-EXCHANGE_ID=$(jq -er '.[0].exchange_id' "$TMP/requests.json")
 PROJECT_ID=$(jq -er '.[0].project_id' "$TMP/requests.json")
 
 BK_ID=$(read_ids tobesynced "$CALLBACK_ID" | jq -er .DKFZ_BK_ID)
 [[ $(read_ids tobesynced "$CALLBACK_ID" | jq -r .dhkiComId) == "$PROJECT_ID" ]]
 
-sed -e "s/<<data_request_id>>/$REQUEST_ID/g" \
-    -e "s/<<session_id>>/$EXCHANGE_ID/g" \
-    "$ROOT/docs/examples/example_input_data.json" > "$TMP/response-bundle.json"
-curl --fail-with-body --silent --show-error \
-  -X POST http://localhost:18085/fhir/Bundle \
-  -H 'Content-Type: application/fhir+json' \
-  --data-binary @"$TMP/response-bundle.json" >/dev/null
+# request_linkage: sends the patient to DHKI TransFAIR again, as onkostar-push does.
+# Prints the HTTP status and the ID of the linkage request.
+request_linkage() {
+  curl --fail-with-body --silent --show-error \
+    "http://localhost:18080/fhir/Consent?patient:identifier=http://localhost:18080/id/KIS_ID%7C$KIS_ID" \
+    -H "Authorization: MainzellisteToken $(ml_token searchConsents)" \
+    | jq -c --arg bk "$BK_ID" --arg kis "$KIS_ID" \
+      '{patient: {resourceType: "Patient", identifier: [{system: "DKFZ_BK_ID", value: $bk}, {system: "KIS_ID", value: $kis}],
+                  name: [{use: "official", family: "Mustermann", given: ["Max"]}], birthDate: "1990-01-01"},
+        consent: (.entry[0].resource | .patient = {identifier: {system: "DKFZ_BK_ID", value: $bk}})}' \
+    | curl --silent --show-error -o "$TMP/linkage.json" -w '%{http_code}' \
+      -X POST http://localhost:18081/request-linkage -H 'Content-Type: application/json' --data-binary @-
+  echo " $(jq -r .id "$TMP/linkage.json")"
+}
 
-curl --fail-with-body --silent --show-error -X POST http://localhost:18083/process-data >/dev/null
+# deliver_response REQUEST_ID [SUBJECT_SYSTEM]: uploads the DIC's response bundle for the request to UMM.
+deliver_response() {
+  sed -e "s/<<data_request_id>>/$1/g" \
+      -e "s/<<session_id>>/$(curl --fail --silent "http://localhost:18083/requests/$1" | jq -er .exchange_id)/g" \
+      -e "s/\"SESSION_ID\"/\"${2:-SESSION_ID}\"/g" \
+      "$ROOT/docs/examples/example_input_data.json" \
+    | curl --fail-with-body --silent --show-error -X POST http://localhost:18085/fhir/Bundle \
+      -H 'Content-Type: application/fhir+json' --data-binary @- >/dev/null
+  curl --fail-with-body --silent --show-error -X POST http://localhost:18083/process-data >/dev/null
+}
+
+echo "Sending the pending patient again..."
+[[ $(request_linkage) == "200 $REQUEST_ID" ]]
+[[ $(curl --fail --silent http://localhost:18083/requests | jq length) == 1 ]]
+
+deliver_response "$REQUEST_ID"
 [[ $(curl --fail --silent "http://localhost:18083/requests/$REQUEST_ID" | jq -r .status) == Success ]]
 curl --fail-with-body --silent --show-error -X POST http://localhost:18081/process-pending > "$TMP/process.json"
 [[ $(jq -r .processed "$TMP/process.json") == 1 ]]
@@ -177,5 +198,16 @@ assert_identifier http://localhost:18086 Procedure PROJECT_1_ID "$PROJECT_ID"
 assert_identifier http://localhost:18087 Condition DKFZ_BK_ID "$BK_ID"
 assert_identifier http://localhost:18087 Procedure DKFZ_BK_ID "$BK_ID"
 [[ $(curl --fail --silent http://localhost:18088/calls | jq -r .calls) == 1 ]]
+
+echo "Sending the loaded patient again..."
+read -r status SECOND_ID < <(request_linkage)
+[[ $status == 201 && $SECOND_ID != "$REQUEST_ID" ]]
+echo "Failing that request at UMM and sending the patient again..."
+deliver_response "$SECOND_ID" WRONG_ID
+[[ $(curl --fail --silent "http://localhost:18083/requests/$SECOND_ID" | jq -r .status) == Error ]]
+read -r status THIRD_ID < <(request_linkage)
+[[ $status == 201 && $THIRD_ID != "$SECOND_ID" ]]
+[[ $(request_linkage) == "200 $THIRD_ID" ]]
+[[ $(curl --fail --silent http://localhost:18083/requests | jq -c '[.[].project_id] | unique') == "[\"$PROJECT_ID\"]" ]]
 
 echo "E2E passed: request $REQUEST_ID loaded into DHKI Blaze under BK ID $BK_ID."
