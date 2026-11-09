@@ -69,11 +69,14 @@ wait_url http://localhost:18087/fhir/metadata
 wait_url http://localhost:18088/calls
 
 echo "Initializing consent policies and template..."
-if ! (cd "$TTP_ROOT" && sh assets/consent-policies.sh \
-  http://localhost pleaseChangeMeToo 18080 >"$TMP/consent-init.log" 2>&1); then
-  cat "$TMP/consent-init.log" >&2
-  exit 1
-fi
+# UMM documents the consents it receives against the same template.
+for target in "pleaseChangeMeToo 18080" "admin-password 18082"; do
+  # shellcheck disable=SC2086
+  if ! (cd "$TTP_ROOT" && sh assets/consent-policies.sh http://localhost $target >"$TMP/consent-init.log" 2>&1); then
+    cat "$TMP/consent-init.log" >&2
+    exit 1
+  fi
+done
 
 echo "Preloading matching patient at the remote site..."
 curl --fail-with-body --silent --show-error \
@@ -165,8 +168,24 @@ request_linkage() {
   echo " $(jq -r .id "$TMP/linkage.json")"
 }
 
+# umm_consents: prints how many consents the UMM Mainzelliste holds for the patient.
+umm_consents() {
+  local session token
+  session=$(curl --fail-with-body --silent --show-error -X POST http://localhost:18082/sessions \
+    -H 'mainzellisteApiKey: transFAIR-password' | jq -er .sessionId)
+  token=$(curl --fail-with-body --silent --show-error -X POST "http://localhost:18082/sessions/$session/tokens" \
+    -H 'mainzellisteApiKey: transFAIR-password' -H 'Content-Type: application/json' \
+    -d '{"type": "searchConsents", "allowedUses": 1}' | jq -er '.tokenId // .id')
+  curl --fail-with-body --silent --show-error -G http://localhost:18082/fhir/Consent \
+    -H "Authorization: MainzellisteToken $token" \
+    --data-urlencode "patient:identifier=http://umm-mainzelliste:8080/id/PROJECT_1_ID|$PROJECT_ID" \
+    | jq '.entry // [] | length'
+}
+
 # deliver_response REQUEST_ID [SUBJECT_SYSTEM]: uploads the DIC's response bundle for the request to UMM.
 deliver_response() {
+  # UMM only fetches bundles updated in a later second than its last fetch.
+  sleep 1
   sed -e "s/<<data_request_id>>/$1/g" \
       -e "s/<<session_id>>/$(curl --fail --silent "http://localhost:18083/requests/$1" | jq -er .exchange_id)/g" \
       -e "s/\"SESSION_ID\"/\"${2:-SESSION_ID}\"/g" \
@@ -175,6 +194,8 @@ deliver_response() {
       -H 'Content-Type: application/fhir+json' --data-binary @- >/dev/null
   curl --fail-with-body --silent --show-error -X POST http://localhost:18083/process-data >/dev/null
 }
+
+[[ $(umm_consents) == 1 ]]
 
 echo "Sending the pending patient again..."
 [[ $(request_linkage) == "200 $REQUEST_ID" ]]
@@ -208,6 +229,7 @@ deliver_response "$SECOND_ID" WRONG_ID
 read -r status THIRD_ID < <(request_linkage)
 [[ $status == 201 && $THIRD_ID != "$SECOND_ID" ]]
 [[ $(request_linkage) == "200 $THIRD_ID" ]]
+[[ $(umm_consents) == 1 ]]
 [[ $(curl --fail --silent http://localhost:18083/requests | jq -c '[.[].project_id] | unique') == "[\"$PROJECT_ID\"]" ]]
 
 echo "E2E passed: request $REQUEST_ID loaded into DHKI Blaze under BK ID $BK_ID."

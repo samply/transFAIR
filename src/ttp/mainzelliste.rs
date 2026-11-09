@@ -5,7 +5,7 @@ use fhir_sdk::r4b::{
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{fhir::PatientExt, ttp_bail, CLIENT};
 
@@ -223,6 +223,15 @@ impl MlConfig {
 
         trace!("{:?}", consent_with_identifiers);
 
+        match self.is_consent_documented(&consent_with_identifiers).await {
+            Ok(true) => {
+                info!("The consent is already documented in the TTP");
+                return Ok(());
+            }
+            Ok(false) => {}
+            Err((_, err)) => warn!("Documenting the consent without checking for an existing one: {err}"),
+        }
+
         let session = self.create_mainzelliste_session().await?;
 
         let token = self.create_mainzelliste_token(session, TokenType::AddConsent).await?;
@@ -253,6 +262,46 @@ impl MlConfig {
         debug!("Response from TTP for Consent request: status={status} text={text}");
 
         Ok(())
+    }
+
+    /// Whether the TTP already holds a consent of the patient with the same content.
+    async fn is_consent_documented(&self, consent: &Consent) -> Result<bool, (StatusCode, &'static str)> {
+        let Some(identifier) = consent.patient.as_ref().and_then(|patient| patient.identifier.as_ref()) else {
+            return Ok(false);
+        };
+        let mut url = self.url.join("fhir/Consent").unwrap();
+        url.query_pairs_mut().append_pair(
+            "patient:identifier",
+            &format!(
+                "{}|{}",
+                identifier.system.as_deref().unwrap_or_default(),
+                identifier.value.as_deref().unwrap_or_default()
+            ),
+        );
+        let session = self.create_mainzelliste_session().await?;
+        let token = self.create_mainzelliste_token(session, TokenType::SearchConsents).await?;
+        let consents = CLIENT
+            .get(url)
+            .header("Authorization", format!("MainzellisteToken {}", token.id))
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+            .map_err(|err| {
+                warn!("Unable to search consents in TTP: {err}");
+                (StatusCode::BAD_GATEWAY, "Unable to search consents in TTP")
+            })?
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|err| {
+                warn!("Unable to parse consents from TTP: {err}");
+                (StatusCode::BAD_GATEWAY, "Unable to parse consents from TTP")
+            })?;
+        let content = consent_content(&serde_json::to_value(consent).unwrap_or_default());
+        Ok(consents["entry"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|entry| consent_content(&entry["resource"]) == content))
     }
 
     /// Id of the Questionnaire whose identifier matches `template`.
@@ -344,11 +393,22 @@ impl MlConfig {
     }
 }
 
+/// What makes two consents of a patient the same; the TTP assigns its own id and meta.
+fn consent_content(consent: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "status": consent["status"],
+        "dateTime": consent["dateTime"],
+        "policy": consent["policy"],
+        "provision": consent["provision"],
+    })
+}
+
 /// Token request body: `{"type": ..., "data": {...}}`, without `data` for variants that take none.
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum TokenType {
     AddConsent,
+    SearchConsents,
     SearchConsentTemplates,
     /// Allows changing the listed external IDs of the patient with ID `patient_id`.
     EditPatient { patient_id: MlId, ids: Vec<String> },
@@ -374,13 +434,36 @@ struct Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{MlId, TokenType};
+    use super::{MlId, TokenType, consent_content};
+
+    #[test]
+    fn compares_consents_by_content() {
+        let stored = serde_json::json!({
+            "resourceType": "Consent",
+            "id": "1",
+            "meta": {"versionId": "1"},
+            "status": "active",
+            "dateTime": "2026-11-09",
+            "policy": [{"uri": "fhir/Questionnaire/q"}],
+            "provision": {"provision": [{"type": "permit", "code": [{"coding": [{"code": "p-2"}]}]}]}
+        });
+        let mut resent = stored.clone();
+        resent["id"] = "2".into();
+        resent["meta"] = serde_json::json!({"versionId": "3"});
+        assert_eq!(consent_content(&stored), consent_content(&resent));
+        resent["status"] = "inactive".into();
+        assert_ne!(consent_content(&stored), consent_content(&resent));
+    }
 
     #[test]
     fn serializes_token_requests() {
         assert_eq!(
             serde_json::to_value(TokenType::AddConsent).unwrap(),
             serde_json::json!({"type": "addConsent"})
+        );
+        assert_eq!(
+            serde_json::to_value(TokenType::SearchConsents).unwrap(),
+            serde_json::json!({"type": "searchConsents"})
         );
         let edit = TokenType::EditPatient {
             patient_id: MlId {
