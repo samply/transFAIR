@@ -69,9 +69,9 @@ impl FhirServer {
             .context("Unable to response from input server")
     }
 
-    /// Ensures a Patient with the given id exists, creating it with only that id as identifier,
-    /// and sets its gender if one is given. Leaves a deleted Patient deleted.
-    pub async fn upsert_patient(&self, id_system: &str, id: &str, gender: Option<&str>) -> anyhow::Result<()> {
+    /// Deletes everything in the Patient's compartment and replaces the Patient with one that has
+    /// only the given id as identifier and the gender, if one is given. Leaves a deleted Patient deleted.
+    pub async fn replace_patient(&self, id_system: &str, id: &str, gender: Option<&str>) -> anyhow::Result<()> {
         let patient_endpoint = format!("{}fhir/Patient/{id}", self.url);
         let response = CLIENT
             .get(&patient_endpoint)
@@ -80,42 +80,72 @@ impl FhirServer {
             .send()
             .await
             .context("Unable to read the patient from the output fhir server")?;
-        let (mut patient, if_match) = match response.status() {
+        match response.status() {
             StatusCode::GONE => return Ok(()),
-            StatusCode::NOT_FOUND => (
-                serde_json::json!({
-                    "resourceType": "Patient",
-                    "id": id,
-                    "identifier": [{"system": id_system, "value": id}]
-                }),
-                None,
-            ),
+            StatusCode::NOT_FOUND => {}
             _ => {
-                let response = response.error_for_status()?;
-                let etag = response.headers().get(header::ETAG).cloned();
-                let patient = response.json::<serde_json::Value>().await?;
-                if gender.is_none() || patient["gender"].as_str() == gender {
-                    return Ok(());
-                }
-                (patient, etag)
+                response.error_for_status()?;
+                self.delete_compartment(id).await?;
             }
-        };
+        }
+        let mut patient = serde_json::json!({
+            "resourceType": "Patient",
+            "id": id,
+            "identifier": [{"system": id_system, "value": id}]
+        });
         if let Some(gender) = gender {
             patient["gender"] = gender.into();
         }
-        let request = CLIENT.put(&patient_endpoint).add_auth(&self.auth).await?;
-        // Fails with 412 if the Patient changed since it was read, or was created meanwhile
-        let request = match if_match {
-            Some(etag) => request.header(header::IF_MATCH, etag),
-            None => request.header(header::IF_NONE_MATCH, "*"),
-        };
-        request
+        CLIENT
+            .put(&patient_endpoint)
+            .add_auth(&self.auth)
+            .await?
             .json(&patient)
             .send()
             .await
             .context("Unable to write the patient to the output fhir server")?
             .error_for_status()?;
         Ok(())
+    }
+
+    /// Deletes every resource in the Patient's compartment but the Patient itself.
+    async fn delete_compartment(&self, id: &str) -> anyhow::Result<()> {
+        let everything_endpoint = format!("{}fhir/Patient/{id}/$everything", self.url);
+        // Pages are fetched anew instead of following next links, which carry the server's own base URL.
+        loop {
+            let page = CLIENT
+                .get(&everything_endpoint)
+                .add_auth(&self.auth)
+                .await?
+                .query(&[("_count", "1000")])
+                .send()
+                .await
+                .context("Unable to read the patient's resources from the output fhir server")?
+                .error_for_status()?
+                .json::<serde_json::Value>()
+                .await?;
+            let deletions: Vec<_> = page["entry"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|entry| &entry["resource"])
+                .filter(|resource| resource["resourceType"] != "Patient")
+                .filter_map(|resource| {
+                    let url = format!("{}/{}", resource["resourceType"].as_str()?, resource["id"].as_str()?);
+                    Some(serde_json::json!({"request": {"method": "DELETE", "url": url}}))
+                })
+                .collect();
+            if deletions.is_empty() {
+                return Ok(());
+            }
+            let count = deletions.len();
+            let transaction = serde_json::json!({"resourceType": "Bundle", "type": "transaction", "entry": deletions});
+            self.post_data(&serde_json::from_value(transaction)?)
+                .await?
+                .error_for_status()
+                .context("Unable to delete the patient's resources from the output fhir server")?;
+            debug!("Deleted {count} resources of patient {id} from the output fhir server");
+        }
     }
 
     // post a fhir bundle to a specified fhir server
