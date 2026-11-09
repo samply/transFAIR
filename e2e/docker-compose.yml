@@ -115,6 +115,7 @@ services:
       TTP_URL: http://callback-mainzelliste:8080/
       TTP_ML_API_KEY: pleaseChangeMeToo
       PROJECT_ID_SYSTEM: dhkiComId
+      RUST_LOG: info
     volumes:
       - dhki-db:/data
       - ./bin/transfair:/usr/local/bin/transfair:ro
@@ -142,6 +143,7 @@ services:
       ML_DB_PASS: mainzelliste
       ML_ROUTINE_CONNECTOR_PASSPHRASE: transFAIR-password
       ML_DIZ_PASSPHRASE: diz-password
+      ML_ADMIN_PASSPHRASE: admin-password
       ML_ALLOWEDREMOTEADDRESSES: 0.0.0.0/0
       ML_LOG_LEVEL: info
     configs:
@@ -185,6 +187,8 @@ services:
       PROJECT_ID_SYSTEM: PROJECT_1_ID
       TTP_URL: http://umm-mainzelliste:8080/
       TTP_ML_API_KEY: transFAIR-password
+      TTP_ML_CONSENT_TEMPLATE: dhki-consent-1-0-0
+      RUST_LOG: info
       FHIR_REQUEST_URL: http://request-blaze:8080/
       FHIR_INPUT_URL: http://umm-blaze:8080/
       FHIR_OUTPUT_URL: http://project-blaze:8080/
