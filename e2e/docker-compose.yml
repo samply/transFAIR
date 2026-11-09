@@ -92,6 +92,7 @@ services:
       ONKOSTAR_PASS: test
       ML_URL: http://callback-mainzelliste:8080/
       ML_API_KEY: pleaseChangeMeToo
+      ML_CONSENT_TEMPLATE_ID: dhki-consent-1-0-0
       DHKI_TRANSFAIR_URL: http://dhki-transfair:8080/
       DKFZ_ID_SYSTEM: DKFZ_BK_ID
     depends_on: [callback-mainzelliste, onkostar-mock, dhki-transfair]
@@ -111,11 +112,14 @@ services:
       REMOTE_FHIR_SERVER_URL: http://umm-blaze/
       REMOTE_EXCHANGE_ID_SYSTEM: SESSION_ID
       DESTINATION_FHIR_SERVER_URL: http://dhki-blaze:8080/
+      TTP_URL: http://callback-mainzelliste:8080/
+      TTP_ML_API_KEY: pleaseChangeMeToo
+      PROJECT_ID_SYSTEM: dhkiComId
     volumes:
       - dhki-db:/data
       - ./bin/transfair:/usr/local/bin/transfair:ro
     networks: [default, beam]
-    depends_on: [dhki-blaze]
+    depends_on: [dhki-blaze, callback-mainzelliste]
 
   umm-db:
     image: postgres:18-alpine
@@ -148,19 +152,27 @@ services:
   request-blaze:
     image: samply/blaze:latest
     ports: ["18084:8080"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx512m
 
   umm-blaze:
     image: samply/blaze:latest
     ports: ["18085:8080"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx512m
     networks: [default, beam]
 
   project-blaze:
     image: samply/blaze:latest
     ports: ["18086:8080"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx512m
 
   dhki-blaze:
     image: samply/blaze:latest
     ports: ["18087:8080"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx512m
 
   umm-transfair:
     image: gcr.io/distroless/cc-debian13:latest

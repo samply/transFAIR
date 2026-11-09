@@ -90,11 +90,54 @@ curl --fail-with-body --silent --show-error \
     "birthDate":"1990-01-01"
   }' > "$TMP/remote-patient.json"
 
+# ml_token TYPE [DATA]: prints a one-time token of the callback Mainzelliste.
+ml_token() {
+  local session
+  session=$(curl --fail-with-body --silent --show-error -X POST http://localhost:18080/sessions \
+    -H 'mainzellisteApiKey: pleaseChangeMeToo' | jq -er .sessionId)
+  jq -nc --arg type "$1" --argjson data "${2:-null}" \
+    '{type: $type, allowedUses: 1} + if $data == null then {} else {data: $data} end' \
+    | curl --fail-with-body --silent --show-error -X POST "http://localhost:18080/sessions/$session/tokens" \
+      -H 'mainzellisteApiKey: pleaseChangeMeToo' -H 'mainzellisteApiVersion: 3.4' \
+      -H 'Content-Type: application/json' --data-binary @- | jq -er '.tokenId // .id'
+}
+
+# read_ids ID_TYPE ID: prints the callback Mainzelliste patient's IDs as an idType -> idString object.
+read_ids() {
+  curl --fail-with-body --silent --show-error "http://localhost:18080/patients?tokenId=$(ml_token readPatients \
+    "$(jq -nc --arg type "$1" --arg id "$2" '{searchIds: [{idType: $type, idString: $id}], resultIds: ["DKFZ_BK_ID", "dhkiComId"]}')")" \
+    | jq -c '.[0].ids | map({key: .idType, value: .idString}) | from_entries'
+}
+
 echo "Creating consented callback patient..."
-(cd "$TTP_ROOT" && sh assets/create-patient-with-consent.sh \
-  http://localhost:18080 pleaseChangeMeToo Max Mustermann 1990-01-01 \
-  dhki-consent-1-0-0 tobesynced pid) > "$TMP/source-patient.json"
-BK_ID=$(jq -er '.callbackId.idString' "$TMP/source-patient.json")
+KIS_ID=900001
+jq -nc --arg kis "$KIS_ID" \
+  '{fields: {vorname: "Max", nachname: "Mustermann", geburtstag: "01", geburtsmonat: "01", geburtsjahr: "1990"},
+    ids: {KIS_ID: $kis}, sureness: true}' \
+  | curl --fail-with-body --silent --show-error \
+    -X POST "http://localhost:18080/patients?tokenId=$(ml_token addPatient '{"idTypes": ["pid", "KIS_ID"]}')" \
+    -H 'mainzellisteApiVersion: 3.4' -H 'Content-Type: application/json' --data-binary @- >/dev/null
+curl --fail-with-body --silent --show-error "http://localhost:18080/fhir/Questionnaire?status=active" \
+  -H "Authorization: MainzellisteToken $(ml_token searchConsentTemplates)" \
+  | jq -e '[.entry[].resource | select(any(.identifier[]?; .value == "dhki-consent-1-0-0"))][0]' > "$TMP/template.json"
+# Mainzelliste validates the consent against the template's contained default consent.
+jq --arg kis "$KIS_ID" --arg today "$(date +%F)" --arg policy "fhir/Questionnaire/$(jq -er .id "$TMP/template.json")" \
+  '.contained[0]
+   | .resourceType = "Consent" | .status = "active" | .dateTime = $today
+   | .patient = {identifier: {system: "http://localhost:18080/id/KIS_ID", value: $kis}}
+   | .policy = [{uri: $policy}]
+   | (.. | objects | select(has("period")) | .period) = {start: "1970-01-01", end: "2999-12-31"}
+   | del(.id, .meta.versionId, .meta.lastUpdated)' \
+  "$TMP/template.json" > "$TMP/consent.json"
+curl --fail-with-body --silent --show-error -X POST http://localhost:18080/fhir/Consent \
+  -H "Authorization: MainzellisteToken $(ml_token addConsent)" \
+  -H 'Content-Type: application/fhir+json' --data-binary @"$TMP/consent.json" >/dev/null
+# Creating the callback ID makes Mainzelliste call onkostar-push, which forwards the patient to DHKI TransFAIR.
+curl --fail-with-body --silent --show-error -X POST \
+  "http://localhost:18080/ids/tobesynced?tokenId=$(ml_token createIds \
+    "$(jq -nc --arg kis "$KIS_ID" '{searchIds: [{idType: "KIS_ID", idString: $kis}], idTypes: ["tobesynced"]}')")" \
+  -H 'mainzellisteApiVersion: 3.4' > "$TMP/callback-id.json"
+CALLBACK_ID=$(jq -er '.[] | select(.idType == "tobesynced") | .idString' "$TMP/callback-id.json")
 
 for _ in $(seq 1 60); do
   curl --fail --silent http://localhost:18083/requests > "$TMP/requests.json"
@@ -103,6 +146,10 @@ for _ in $(seq 1 60); do
 done
 REQUEST_ID=$(jq -er '.[0].id' "$TMP/requests.json")
 EXCHANGE_ID=$(jq -er '.[0].exchange_id' "$TMP/requests.json")
+PROJECT_ID=$(jq -er '.[0].project_id' "$TMP/requests.json")
+
+BK_ID=$(read_ids tobesynced "$CALLBACK_ID" | jq -er .DKFZ_BK_ID)
+[[ $(read_ids tobesynced "$CALLBACK_ID" | jq -r .dhkiComId) == "$PROJECT_ID" ]]
 
 sed -e "s/<<data_request_id>>/$REQUEST_ID/g" \
     -e "s/<<session_id>>/$EXCHANGE_ID/g" \
@@ -125,7 +172,6 @@ assert_identifier() {
     >/dev/null
 }
 
-PROJECT_ID=$(jq -er '.[0].project_id' "$TMP/requests.json")
 assert_identifier http://localhost:18086 Condition PROJECT_1_ID "$PROJECT_ID"
 assert_identifier http://localhost:18086 Procedure PROJECT_1_ID "$PROJECT_ID"
 assert_identifier http://localhost:18087 Condition DKFZ_BK_ID "$BK_ID"
