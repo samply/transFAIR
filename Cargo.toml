@@ -28,3 +28,9 @@ build-data = "0.2.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+
+# TODO: Remove once sqlx > 0.9.0 is released. sqlx 0.9.0 caps libsqlite3-sys
+# below 0.38, which keeps us on a bundled SQLite affected by RUSTSEC-2026-0459.
+# This commit on sqlx main allows libsqlite3-sys 0.39.x (launchbadge/sqlx#4502).
+[patch.crates-io]
+sqlx = { git = "https://github.com/launchbadge/sqlx", rev = "10462fa4414c6c7f1ed1d39bb31678e3b726878c" }
